@@ -1,6 +1,6 @@
 import { z, type ZodRawShape } from 'zod'
 import { classToZod } from '#exjs-controllers/core/ClassToZod'
-import { TraceSpan } from '#exjs-controllers/decorators/TraceSpan.js'
+import { TraceSpan } from '#exjs-controllers/decorators/TraceSpan'
 
 type NonFunctionPropertyNames<T> = {
   [K in keyof T]: T[K] extends (...args: never[]) => unknown ? never : K
