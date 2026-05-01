@@ -1,0 +1,108 @@
+{
+  "name": "exjs-controllers",
+  "version": "0.1.0",
+  "description": "Declarative controllers, DTO validation, dependency injection, OpenAPI and Express bootstrap for TypeScript APIs.",
+  "license": "MIT",
+  "keywords": [
+    "express",
+    "controllers",
+    "typescript",
+    "decorators",
+    "openapi",
+    "zod"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "imports": {
+    "#exjs-controllers/*": "./dist/*"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./config/*": {
+      "types": "./dist/config/*.d.ts",
+      "default": "./dist/config/*.js"
+    },
+    "./authentication/*": {
+      "types": "./dist/authentication/*.d.ts",
+      "default": "./dist/authentication/*.js"
+    },
+    "./core/*": {
+      "types": "./dist/core/*.d.ts",
+      "default": "./dist/core/*.js"
+    },
+    "./decorators/*": {
+      "types": "./dist/decorators/*.d.ts",
+      "default": "./dist/decorators/*.js"
+    },
+    "./entities/*": {
+      "types": "./dist/entities/*.d.ts",
+      "default": "./dist/entities/*.js"
+    },
+    "./http/*": {
+      "types": "./dist/http/*.d.ts",
+      "default": "./dist/http/*.js"
+    },
+    "./logging/*": {
+      "types": "./dist/logging/*.d.ts",
+      "default": "./dist/logging/*.js"
+    },
+    "./metadata/*": {
+      "types": "./dist/metadata/*.d.ts",
+      "default": "./dist/metadata/*.js"
+    },
+    "./observability/*": {
+      "types": "./dist/observability/*.d.ts",
+      "default": "./dist/observability/*.js"
+    },
+    "./openapi/*": {
+      "types": "./dist/openapi/*.d.ts",
+      "default": "./dist/openapi/*.js"
+    },
+    "./schemas/*": {
+      "types": "./dist/schemas/*.d.ts",
+      "default": "./dist/schemas/*.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thebylito/exjs-controllers.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thebylito/exjs-controllers/issues"
+  },
+  "homepage": "https://github.com/thebylito/exjs-controllers#readme",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "prepack": "npm run clean && npm run build",
+    "pack:dry-run": "npm pack --dry-run",
+    "publish:dry-run": "npm publish --dry-run"
+  },
+  "dependencies": {
+    "@scalar/express-api-reference": "^0.9.10",
+    "express": "^5.2.1",
+    "pino": "^10.3.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3"
+  }
+}

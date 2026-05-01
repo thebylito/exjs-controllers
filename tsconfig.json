@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "skipLibCheck": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "rootDir": ".",
+    "outDir": "./dist",
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "esModuleInterop": true,
+    "lib": ["ES2022", "ESNext"],
+    "types": ["node"],
+    "paths": {
+      "#exjs-controllers/*": ["./*"]
+    }
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}
