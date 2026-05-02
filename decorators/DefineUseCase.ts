@@ -5,7 +5,7 @@ import { runWithSpan } from '#exjs-controllers/observability/tracing'
 type ControllerMethod = (this: object, ...args: unknown[]) => unknown
 
 interface UseCaseLike {
-  execute(input: BaseSchema): unknown
+  execute(input: BaseSchema, ...args: unknown[]): unknown
 }
 
 interface UseCaseDecoratorTarget {
@@ -120,19 +120,27 @@ function dispatchToUseCase(
     )
   }
 
-  const input = resolveUseCaseInput(args, result)
+  const { input, extraArgs } = resolveUseCaseInvocation(args, result)
 
-  return useCase.execute(input)
+  return useCase.execute(input, ...extraArgs)
 }
 
-function resolveUseCaseInput(args: unknown[], result: unknown): BaseSchema {
+function resolveUseCaseInvocation(
+  args: unknown[],
+  result: unknown,
+): { input: BaseSchema; extraArgs: unknown[] } {
   if (result instanceof BaseSchema) {
-    return result
+    return { input: result, extraArgs: [] }
   }
 
-  const firstSchemaArg = args.find((arg) => arg instanceof BaseSchema)
+  const firstSchemaArgIndex = args.findIndex((arg) => arg instanceof BaseSchema)
+  const firstSchemaArg = args[firstSchemaArgIndex]
+
   if (firstSchemaArg instanceof BaseSchema) {
-    return firstSchemaArg
+    return {
+      input: firstSchemaArg,
+      extraArgs: args.slice(firstSchemaArgIndex + 1),
+    }
   }
 
   throw new Error(

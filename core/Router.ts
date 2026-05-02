@@ -1,4 +1,5 @@
 import { createOAuth2AuthenticationMiddleware } from '#exjs-controllers/authentication/oauth2'
+import { getAuthenticationContext } from '#exjs-controllers/authentication/oauth2'
 import type { ExpressServerOptions } from '#exjs-controllers/config/expressServerOptions'
 import type { Application } from '#exjs-controllers/http/application'
 import { ensureHttpContext, type Handler } from '#exjs-controllers/http/httpTypes'
@@ -21,6 +22,15 @@ import { runWithControllerSpan } from '#exjs-controllers/observability/tracing'
 export type ControllerClass = new (...args: any[]) => object
 
 const registeredRoutes = new Set<string>()
+
+class RequiredSessionContextError extends Error {
+  readonly statusCode = 401
+
+  constructor() {
+    super('Authenticated session context is required for @SessionContext().')
+    this.name = 'RequiredSessionContextError'
+  }
+}
 
 export function _resetRoutesForTests(): void {
   registeredRoutes.clear()
@@ -199,6 +209,7 @@ function normalizeJsonControllerResult(result: unknown): unknown {
 function resolveArgs(
   request: {
     body: unknown
+    locals: Record<string, unknown>
     params: Record<string, string | string[]>
     query: Record<string, unknown>
     headers: Record<string, string | string[] | undefined>
@@ -233,6 +244,16 @@ function resolveArgs(
       case 'res':
         args[p.index] = response
         break
+      case 'session-context': {
+        const authenticationContext = getAuthenticationContext(request)
+
+        if (!authenticationContext) {
+          throw new RequiredSessionContextError()
+        }
+
+        args[p.index] = authenticationContext
+        break
+      }
     }
   }
 

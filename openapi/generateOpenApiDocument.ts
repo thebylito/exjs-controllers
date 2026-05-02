@@ -106,8 +106,8 @@ export function generateOpenApiDocument(
     info,
     ...(buildComponents(options)
       ? {
-          components: buildComponents(options),
-        }
+        components: buildComponents(options),
+      }
       : {}),
     ...(options.openapi?.documentation.security
       ? { security: options.openapi.documentation.security }
@@ -223,9 +223,9 @@ function buildRequestBody(
 }
 
 function buildResponses(route: RouteMetadata): OpenApiOperation['responses'] {
-  const outputSchema = buildSchemaFromClass(route.outputClass, 'output')
+  const itemSchema = buildSchemaFromClass(route.outputClass, 'output')
 
-  if (!outputSchema) {
+  if (!itemSchema) {
     return {
       '200': {
         description: 'Successful response',
@@ -233,12 +233,16 @@ function buildResponses(route: RouteMetadata): OpenApiOperation['responses'] {
     }
   }
 
+  const outputSchema = route.outputIsArray
+    ? { type: 'array', items: itemSchema }
+    : itemSchema
+
   return {
     '200': {
       description: 'Successful response',
       content: {
         'application/json': {
-          schema: outputSchema,
+          schema: outputSchema as JsonObject,
         },
       },
     },
@@ -389,7 +393,7 @@ function resolveDocumentedSecurityRequirementScopes(
 
 function normalizePath(prefix: string, routePath: string): string {
   const combined = (prefix + routePath).replace(/\/+/g, '/')
-  return combined.endsWith('/') && combined.length > 1
-    ? combined.slice(0, -1)
-    : combined || '/'
+  const withoutTrailingSlash =
+    combined.endsWith('/') && combined.length > 1 ? combined.slice(0, -1) : combined || '/'
+  return withoutTrailingSlash.replace(/:([a-zA-Z_][a-zA-Z0-9_]*)/g, '{$1}')
 }

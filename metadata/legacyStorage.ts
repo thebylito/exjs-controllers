@@ -24,6 +24,7 @@ export type ParamType =
   | 'header'
   | 'req'
   | 'res'
+  | 'session-context'
 
 export interface ParamMetadata {
   index: number

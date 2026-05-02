@@ -13,6 +13,7 @@ export type InjectionToken<T = unknown> = new (...args: any[]) => T
 export interface RouteOptions {
   inputClass?: new (...args: any[]) => object
   outputClass?: new (...args: any[]) => object
+  outputIsArray?: boolean
   summary?: string
   description?: string
   tags?: string[]
