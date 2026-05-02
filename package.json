@@ -93,7 +93,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "tsc -p tsconfig.json",
+    "build": "yarn tsc -p tsconfig.json",
     "prepack": "npm run clean && npm run build",
     "pack:dry-run": "npm pack --dry-run",
     "publish:dry-run": "npm publish --dry-run"
