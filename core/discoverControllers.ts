@@ -123,8 +123,7 @@ function isDecoratedController(value: unknown): value is ControllerClass {
 }
 
 function runtimeExtensions(): ReadonlySet<string> {
-  const currentFile = new URL(import.meta.url).pathname
-  return currentFile.endsWith('.ts') ? SOURCE_EXTENSIONS : BUILD_EXTENSIONS
+  return new Set([...SOURCE_EXTENSIONS, ...BUILD_EXTENSIONS])
 }
 
 async function pathExists(targetPath: string): Promise<boolean> {
