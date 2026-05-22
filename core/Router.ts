@@ -1,5 +1,12 @@
-import { createOAuth2AuthenticationMiddleware } from '#exjs-controllers/authentication/oauth2'
-import { getAuthenticationContext } from '#exjs-controllers/authentication/oauth2'
+import {
+  createAuthenticationMiddleware,
+  RESOLVED_PRINCIPAL_KEY,
+} from '#exjs-controllers/core/authentication/middleware'
+import {
+  UnauthorizedError,
+  ForbiddenError,
+} from '#exjs-controllers/core/authentication/errors'
+import type { ResolvedPrincipal } from '#exjs-controllers/core/authentication/types'
 import type { ExpressServerOptions } from '#exjs-controllers/config/expressServerOptions'
 import type { Application } from '#exjs-controllers/http/application'
 import { ensureHttpContext, type Handler } from '#exjs-controllers/http/httpTypes'
@@ -22,15 +29,6 @@ import { runWithControllerSpan } from '#exjs-controllers/observability/tracing'
 export type ControllerClass = new (...args: any[]) => object
 
 const registeredRoutes = new Set<string>()
-
-class RequiredSessionContextError extends Error {
-  readonly statusCode = 401
-
-  constructor() {
-    super('Authenticated session context is required for @SessionContext().')
-    this.name = 'RequiredSessionContextError'
-  }
-}
 
 export function _resetRoutesForTests(): void {
   registeredRoutes.clear()
@@ -123,6 +121,7 @@ function registerRoute(
     route.handlerName,
     controllerDecoratorMetadata,
     serverOptions,
+    handlerParams,
   )
   const routeHandlers: Handler[] = []
 
@@ -244,14 +243,30 @@ function resolveArgs(
       case 'res':
         args[p.index] = response
         break
-      case 'session-context': {
-        const authenticationContext = getAuthenticationContext(request)
+      case 'current-user':
+      case 'current-api-key': {
+        const attached = (request as any)[RESOLVED_PRINCIPAL_KEY] as
+          | ResolvedPrincipal
+          | undefined
+        const expectedKind = p.type === 'current-user' ? 'user' : 'api-key'
 
-        if (!authenticationContext) {
-          throw new RequiredSessionContextError()
+        if (!attached) {
+          if (p.optional === true) {
+            args[p.index] = undefined
+            break
+          }
+          throw new UnauthorizedError()
         }
 
-        args[p.index] = authenticationContext
+        if (attached.kind !== expectedKind) {
+          if (p.optional === true) {
+            args[p.index] = undefined
+            break
+          }
+          throw new ForbiddenError()
+        }
+
+        args[p.index] = attached.principal
         break
       }
     }
@@ -290,23 +305,32 @@ function resolveAuthenticationHandler(
   handlerName: string | symbol,
   controllerDecoratorMetadata: DecoratorMetadata | undefined,
   serverOptions: ExpressServerOptions | undefined,
+  handlerParams: ParamMetadata[],
 ): Handler | undefined {
   const authorization =
     getAuthorizationFromMeta(controllerDecoratorMetadata, handlerName) ??
     legacyAuthorizationMap.get(Object.getPrototypeOf(instance))?.get(handlerName)
 
-  if (!authorization) {
+  const principalParams = handlerParams.filter(
+    p => p.type === 'current-user' || p.type === 'current-api-key',
+  )
+  const hasPrincipalDecorator = principalParams.length > 0
+  const hasAuthorizedDecorator = authorization !== undefined
+
+  if (!hasAuthorizedDecorator && !hasPrincipalDecorator) {
     return undefined
   }
 
   if (!serverOptions?.authentication) {
     throw new Error(
-      `[Authentication] A rota protegida ${instance.constructor.name}.${String(handlerName)} exige configuracao de authentication no bootstrap.`,
+      `[Authentication] A rota protegida ${instance.constructor.name}.${String(handlerName)} exige authentication config no bootstrap.`,
     )
   }
 
-  return createOAuth2AuthenticationMiddleware({
+  return createAuthenticationMiddleware({
     authentication: serverOptions.authentication,
-    requiredScopes: authorization.requiredScopes,
+    requiredPermissions: authorization?.permissions ?? [],
+    allowedKinds: authorization?.kinds,
+    hasAuthorizedDecorator,
   })
 }

@@ -1,5 +1,4 @@
 import { legacyParamMap, type ParamType, type ParamMetadata } from '#exjs-controllers/metadata/legacyStorage'
-import type { AuthenticationContext } from '#exjs-controllers/authentication/oauth2'
 
 function createParamDecorator(
   type: ParamType,
@@ -48,9 +47,3 @@ export function Req() {
 export function Res() {
   return createParamDecorator('res')
 }
-
-export function SessionContext() {
-  return createParamDecorator('session-context')
-}
-
-export type SessionContext = AuthenticationContext

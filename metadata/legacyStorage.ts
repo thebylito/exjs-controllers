@@ -24,13 +24,15 @@ export type ParamType =
   | 'header'
   | 'req'
   | 'res'
-  | 'session-context'
+  | 'current-user'
+  | 'current-api-key'
 
 export interface ParamMetadata {
   index: number
   type: ParamType
   name?: string
   schemaClass?: new (...args: any[]) => object
+  optional?: boolean
 }
 
 export const legacyParamMap = new WeakMap<object, Map<string, ParamMetadata[]>>()

@@ -3,13 +3,31 @@ import {
   type AuthorizationMetadata,
 } from '#exjs-controllers/metadata/symbols'
 import { legacyAuthorizationMap } from '#exjs-controllers/metadata/legacyStorage'
+import type { PrincipalKind } from '#exjs-controllers/core/authentication/types'
+
+export type AuthorizationOptions = {
+  permissions?: string[]
+  kinds?: PrincipalKind[]
+}
 
 type DecoratedMethod = (this: object, ...args: unknown[]) => unknown
 
-export function Authorized(...requiredScopes: string[]) {
-  const authorization: AuthorizationMetadata = {
-    requiredScopes,
-  }
+function isAuthorizationOptions(value: unknown): value is AuthorizationOptions {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function Authorized(...permissions: string[]): MethodDecorator
+export function Authorized(options: AuthorizationOptions): MethodDecorator
+export function Authorized(
+  ...args: [AuthorizationOptions] | string[]
+): MethodDecorator {
+  const authorization: AuthorizationMetadata =
+    args.length === 1 && isAuthorizationOptions(args[0])
+      ? {
+          permissions: args[0].permissions ?? [],
+          ...(args[0].kinds ? { kinds: args[0].kinds } : {}),
+        }
+      : { permissions: args as string[] }
 
   return function (
     valueOrTarget: DecoratedMethod | object,
@@ -22,7 +40,6 @@ export function Authorized(...requiredScopes: string[]) {
         (metadata[AUTHORIZATION_METADATA] as
           | Map<string | symbol, AuthorizationMetadata>
           | undefined) ?? new Map<string | symbol, AuthorizationMetadata>()
-
       authorizationMap.set(ctxOrKey.name, authorization)
       metadata[AUTHORIZATION_METADATA] = authorizationMap
       return
@@ -32,8 +49,7 @@ export function Authorized(...requiredScopes: string[]) {
     const authorizationMap =
       legacyAuthorizationMap.get(target) ??
       new Map<string | symbol, AuthorizationMetadata>()
-
-    authorizationMap.set(ctxOrKey, authorization)
+    authorizationMap.set(ctxOrKey as string | symbol, authorization)
     legacyAuthorizationMap.set(target, authorizationMap)
   }
 }

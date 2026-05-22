@@ -1,7 +1,7 @@
 import type { ErrorMiddleware, Handler } from '#exjs-controllers/http/httpTypes'
 import type { ControllerClass } from '#exjs-controllers/core/Router'
 import type { HttpLoggerOptions } from '#exjs-controllers/logging/httpLogger'
-import type { OAuth2AuthenticationOptions } from '#exjs-controllers/authentication/oauth2'
+import type { AuthenticationConfig } from '#exjs-controllers/core/authentication/types'
 
 export interface MiddlewareRegistration {
   path: string
@@ -135,7 +135,7 @@ export interface ScalarConfigurationOptions {
 export interface ExpressServerOptions {
   controllers?: ControllerClass[]
   controllerDiscovery?: ControllerDiscoveryOptions
-  authentication?: OAuth2AuthenticationOptions
+  authentication?: AuthenticationConfig
   logger?: HttpLoggerOptions | false
   middlewares?: MiddlewareRegistration[]
   errorHandler?: ErrorMiddleware

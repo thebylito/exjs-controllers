@@ -1,4 +1,5 @@
 import type { ZodType } from 'zod'
+import type { PrincipalKind } from '#exjs-controllers/core/authentication/types'
 ;(Symbol as any).metadata ??= Symbol.for('Symbol.metadata')
 
 export const ROUTE_METADATA = Symbol('route_metadata')
@@ -26,7 +27,8 @@ export interface RouteMetadata extends RouteOptions {
 }
 
 export interface AuthorizationMetadata {
-  requiredScopes: string[]
+  permissions: string[]
+  kinds?: PrincipalKind[]
 }
 
 export interface ControllerMeta {

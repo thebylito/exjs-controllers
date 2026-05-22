@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.4.0] — 2026-05-21
+
+### Breaking
+
+- **Authentication redesign.** A lib agora é agnóstica ao esquema de autenticação. Substituído `authentication: OAuth2AuthenticationOptions` por `authentication: AuthenticationConfig` em `ExpressServerOptions`, com hooks `currentUserChecker` e `authorizationChecker` providos pelo consumidor.
+- **Removido:** `authentication/oauth2.ts`, `authentication/oauth2Discovery.ts`, `entities/BaseEntity.ts`, `@SessionContext()` decorator, `AuthenticationContext` type, `SessionContext` type alias, `OAuth2AuthenticationOptions` (e tipos relacionados), `RequiredSessionContextError`.
+- **Renomeado:** `AuthorizationMetadata.requiredScopes` → `permissions`.
+
+### Added
+
+- `@CurrentUser()` e `@CurrentApiKey()` parameter decorators (default required; aceitam `{ optional: true }` para permitir `undefined` quando não há principal).
+- `core/authentication` subpath com tipos públicos (`AuthenticationConfig`, `ResolvedPrincipal`, `PrincipalKind`, `Action`, `OpenAPISecurityScheme`, `OpenApiSecuritySchemeEntry`, `ScalarSecurityConfig`).
+- `UnauthorizedError` (status 401) e `ForbiddenError` (status 403) — lançados pela lib quando autenticação/autorização falha.
+- `@Authorized` agora aceita forma objeto: `@Authorized({ permissions?, kinds? })` além da forma curta `@Authorized(...permissions)`.
+- Vitest test infrastructure com 28 testes cobrindo erros, decorators e middleware.
+
+### Changed
+
+- **OpenAPI**: `components.securitySchemes` e `security` por rota derivam de `authentication.openApiSecuritySchemes`. Schemes podem declarar `kinds?: PrincipalKind[]` para filtrar a quais rotas se aplicam.
+- **Scalar UI**: `configureApplication` agora resolve o `preferredSecurityScheme` a partir dos schemes registrados em `authentication.openApiSecuritySchemes` (em vez do `provider.name` OAuth2-específico).
+
+[0.4.0]: https://github.com/thebylito/exjs-controllers/compare/v0.3.0...v0.4.0
+
+---
+
 ## [0.3.0] — 2026-05-01
 
 ### Added

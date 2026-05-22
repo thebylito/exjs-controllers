@@ -5,8 +5,13 @@ import type {
   ExpressServerOptions,
   OpenApiDocumentationOptions,
   OpenApiSecurityRequirement,
+  OpenApiSecurityScheme,
 } from '#exjs-controllers/config/expressServerOptions'
 import type { ControllerClass } from '#exjs-controllers/core/Router'
+import type {
+  AuthenticationConfig,
+  PrincipalKind,
+} from '#exjs-controllers/core/authentication/types'
 import {
   legacyAuthorizationMap,
   legacyControllerMap,
@@ -70,11 +75,6 @@ export function generateOpenApiDocument(
   }
 
   const paths: OpenApiDocument['paths'] = {}
-  const securitySchemeName = resolveSecuritySchemeName(options)
-  const documentedOAuthScopes = resolveDocumentedOAuthScopes(
-    options,
-    securitySchemeName,
-  )
 
   for (const controller of controllers) {
     const controllerMeta = getControllerMeta(controller)
@@ -89,8 +89,7 @@ export function generateOpenApiDocument(
         route,
         controllerParams.get(String(route.handlerName)) ?? [],
         authorization,
-        securitySchemeName,
-        documentedOAuthScopes,
+        options.authentication,
       )
 
       if (!paths[fullPath]) {
@@ -120,8 +119,7 @@ function buildOperation(
   route: RouteMetadata,
   params: ParamMetadata[],
   authorization: AuthorizationMetadata | undefined,
-  securitySchemeName: string | undefined,
-  documentedOAuthScopes: Set<string> | undefined,
+  authentication: AuthenticationConfig | undefined,
 ): OpenApiOperation {
   const operation: OpenApiOperation = {
     responses: buildResponses(route),
@@ -149,18 +147,49 @@ function buildOperation(
     operation.requestBody = requestBody
   }
 
-  if (authorization && securitySchemeName) {
-    operation.security = [
-      {
-        [securitySchemeName]: resolveDocumentedSecurityRequirementScopes(
-          authorization.requiredScopes,
-          documentedOAuthScopes,
-        ),
-      },
-    ]
+  const security = buildRouteSecurity(authorization, params, authentication)
+  if (security) {
+    operation.security = security
   }
 
   return operation
+}
+
+function buildRouteSecurity(
+  authorization: AuthorizationMetadata | undefined,
+  params: ParamMetadata[],
+  authentication: AuthenticationConfig | undefined,
+): Array<Record<string, string[]>> | undefined {
+  if (!authentication) return undefined
+
+  const nonOptionalPrincipalKinds: PrincipalKind[] = params
+    .filter(p =>
+      (p.type === 'current-user' || p.type === 'current-api-key') &&
+      p.optional !== true,
+    )
+    .map(p => (p.type === 'current-user' ? 'user' : 'api-key'))
+
+  const hasAuth = authorization !== undefined
+  const hasNonOptionalPrincipal = nonOptionalPrincipalKinds.length > 0
+
+  if (!hasAuth && !hasNonOptionalPrincipal) return undefined
+
+  const requiredKinds: PrincipalKind[] =
+    authorization?.kinds ??
+    (hasNonOptionalPrincipal
+      ? Array.from(new Set(nonOptionalPrincipalKinds))
+      : ['user', 'api-key'])
+
+  const schemes = authentication.openApiSecuritySchemes ?? {}
+  const eligible = Object.entries(schemes).filter(([_, entry]) => {
+    if (!entry.kinds || entry.kinds.length === 0) return true
+    return entry.kinds.some(k => requiredKinds.includes(k))
+  })
+
+  if (eligible.length === 0) return undefined
+
+  const scopes = authorization?.permissions ?? []
+  return eligible.map(([name]) => ({ [name]: scopes }))
 }
 
 function buildParameters(params: ParamMetadata[]): OpenApiParameter[] {
@@ -309,86 +338,26 @@ function getAuthorizationMetadata(
   return legacyAuthorizationMap.get(Ctor.prototype)?.get(handlerName)
 }
 
-function resolveSecuritySchemeName(
-  options: ExpressServerOptions,
-): string | undefined {
-  const preferredSecurityScheme =
-    options.scalar?.authentication?.preferredSecurityScheme
-
-  if (typeof preferredSecurityScheme === 'string') {
-    return preferredSecurityScheme
-  }
-
-  if (Array.isArray(preferredSecurityScheme)) {
-    const firstEntry = preferredSecurityScheme[0]
-
-    if (typeof firstEntry === 'string') {
-      return firstEntry
-    }
-
-    if (Array.isArray(firstEntry)) {
-      return firstEntry.find((candidate) => typeof candidate === 'string')
-    }
-  }
-
-  if (options.authentication?.provider.name) {
-    return options.authentication.provider.name
-  }
-
-  return Object.keys(
-    options.openapi?.documentation.components?.securitySchemes ?? {},
-  )[0]
-}
-
 function buildComponents(
   options: ExpressServerOptions,
 ): OpenApiDocument['components'] | undefined {
-  return options.openapi?.documentation.components
-}
+  const userComponents = options.openapi?.documentation.components
+  const authSchemes = options.authentication?.openApiSecuritySchemes
 
-function resolveDocumentedOAuthScopes(
-  options: ExpressServerOptions,
-  securitySchemeName: string | undefined,
-): Set<string> | undefined {
-  if (!securitySchemeName) {
-    return undefined
+  if (!authSchemes && !userComponents) return undefined
+
+  const securitySchemes: Record<string, OpenApiSecurityScheme> = {
+    ...(userComponents?.securitySchemes ?? {}),
   }
 
-  const scheme =
-    options.openapi?.documentation.components?.securitySchemes?.[securitySchemeName]
-
-  if (!scheme || scheme.type !== 'oauth2' || !scheme.flows) {
-    return undefined
+  for (const [name, entry] of Object.entries(authSchemes ?? {})) {
+    securitySchemes[name] = entry.scheme as unknown as OpenApiSecurityScheme
   }
 
-  const scopes = new Set<string>()
-
-  for (const flow of Object.values(scheme.flows)) {
-    if (!flow) {
-      continue
-    }
-
-    for (const scope of Object.keys(flow.scopes ?? {})) {
-      scopes.add(scope)
-    }
+  return {
+    ...(userComponents ?? {}),
+    ...(Object.keys(securitySchemes).length > 0 ? { securitySchemes } : {}),
   }
-
-  return scopes
-}
-
-function resolveDocumentedSecurityRequirementScopes(
-  requiredScopes: string[],
-  documentedOAuthScopes: Set<string> | undefined,
-): string[] {
-  if (
-    !documentedOAuthScopes ||
-    requiredScopes.length === 0 ||
-    !requiredScopes.every((scope) => documentedOAuthScopes.has(scope))
-  ) {
-    return []
-  }
-
-  return requiredScopes
 }
 
 function normalizePath(prefix: string, routePath: string): string {

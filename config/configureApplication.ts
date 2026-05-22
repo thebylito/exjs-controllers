@@ -160,8 +160,11 @@ function resolveScalarSecuritySchemeName(
     }
   }
 
-  if (options.authentication?.provider.name) {
-    return options.authentication.provider.name
+  const registeredSchemes = Object.keys(
+    options.authentication?.openApiSecuritySchemes ?? {},
+  )
+  if (registeredSchemes.length === 1) {
+    return registeredSchemes[0]
   }
 
   return Object.keys(openApiDocument.components?.securitySchemes ?? {})[0]
