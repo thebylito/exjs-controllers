@@ -15,6 +15,10 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "imports": {
+    "#exjs-controllers/core/authentication": {
+      "types": "./dist/core/authentication/index.d.ts",
+      "default": "./dist/core/authentication/index.js"
+    },
     "#exjs-controllers/*": {
       "types": "./dist/*.d.ts",
       "default": "./dist/*.js"
@@ -24,6 +28,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./core/authentication": {
+      "types": "./dist/core/authentication/index.d.ts",
+      "default": "./dist/core/authentication/index.js"
     },
     "./config/*": {
       "types": "./dist/config/*.d.ts",
