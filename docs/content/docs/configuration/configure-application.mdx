@@ -1,0 +1,154 @@
+---
+title: configureApplication
+description: The single entry point that wires controllers, middlewares, auth, logging, OpenAPI and Scalar onto an Express application.
+icon: ArrowsClockwise
+---
+
+`configureApplication(app, options)` is where every moving part of `exjs-controllers` is registered against an [`Application`](/docs/core/getting-started). It is `async` because controller discovery may read from disk.
+
+```ts
+import { createApplication } from 'exjs-controllers/http/application'
+import { configureApplication } from 'exjs-controllers/config/configureApplication'
+
+const app = createApplication()
+
+await configureApplication(app, {
+  controllers: [UsersController, OrdersController],
+  logger: { logFormat: 'pretty' },
+  openapi: {
+    documentation: { info: { title: 'My API', version: '1.0.0' } }
+  },
+  enableScalar: true
+})
+
+app.listen(3000)
+```
+
+## What it does, in order
+
+1. Resolves the controller list — either `options.controllers` or via [Controller Discovery](/docs/configuration/controller-discovery).
+2. Mounts a tiny middleware that ensures every request carries an `HttpRequest` shape (`locals`, `cookies`).
+3. Mounts the HTTP logger middleware if `logger` is set.
+4. For every `@JsonController(prefix)`, mounts `express.json()` scoped to `prefix`.
+5. Applies user-defined middlewares from `middlewares`.
+6. Serves the OpenAPI JSON at `openapi.documentPath` (default `/docs/openapi.json`) when `openapi` is set.
+7. Mounts Scalar at `scalar.referencePath` (default `/docs`) when `enableScalar: true`.
+8. Registers every controller's routes, wiring the authentication middleware where needed.
+9. Mounts `errorHandler` last, if provided.
+
+## Options reference
+
+```ts title="exjs-controllers/config/expressServerOptions"
+interface ExpressServerOptions {
+  controllers?: ControllerClass[]
+  controllerDiscovery?: ControllerDiscoveryOptions
+  authentication?: AuthenticationConfig
+  logger?: HttpLoggerOptions | false
+  middlewares?: MiddlewareRegistration[]
+  errorHandler?: ErrorMiddleware
+  openapi?: {
+    documentPath?: string
+    documentation: OpenApiDocumentationOptions
+  }
+  scalar?: ScalarConfigurationOptions
+  enableScalar?: boolean
+}
+```
+
+### `controllers`
+
+Explicit list of controller classes. When provided, takes precedence over discovery.
+
+```ts
+controllers: [UsersController, OrdersController]
+```
+
+### `controllerDiscovery`
+
+Used when `controllers` is omitted. See [Controller Discovery](/docs/configuration/controller-discovery).
+
+```ts
+controllerDiscovery: {
+  rootDir: process.cwd(),
+  directories: ['src', 'dist/src']
+}
+```
+
+### `authentication`
+
+Plug in your principal resolver, authorization checker and OpenAPI security schemes. Full reference in [Authentication](/docs/authentication/configuration).
+
+### `logger`
+
+Pass `false` to disable logging. Otherwise, pass an `HttpLoggerOptions` object — see [Logger](/docs/observability/logger).
+
+```ts
+logger: {
+  logFormat: 'pretty',
+  filePath: 'logs/app.log',
+  correlationIdHeaderName: 'x-correlation-id'
+}
+```
+
+### `middlewares`
+
+Express middlewares applied **before** controllers. Each entry is `{ path, handlers }`. Use `path: '/'` (or `''`) to mount globally.
+
+```ts
+import helmet from 'helmet'
+import cors from 'cors'
+
+middlewares: [
+  { path: '/', handlers: [helmet()] },
+  { path: '/api', handlers: [cors({ origin: 'https://example.com' })] }
+]
+```
+
+### `errorHandler`
+
+Standard Express 5 error handler `(error, request, response, next) => void`. Mounted last so it sees every framework error.
+
+```ts
+errorHandler: (error, _req, res, _next) => {
+  const status = (error as { status?: number }).status ?? 500
+  res.status(status).json({ message: (error as Error).message })
+}
+```
+
+### `openapi`
+
+Triggers generation of the OpenAPI document. The minimum is `documentation.info.title` and `documentation.info.version`.
+
+```ts
+openapi: {
+  documentPath: '/internal/openapi.json', // default: '/docs/openapi.json'
+  documentation: {
+    info: { title: 'My API', version: '1.0.0' },
+    components: {
+      securitySchemes: {
+        bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }
+      }
+    },
+    security: [{ bearerAuth: [] }]
+  }
+}
+```
+
+### `enableScalar`
+
+Mounts the [Scalar](https://scalar.com) API reference UI at `/docs` (configurable via `scalar.referencePath`). Requires `openapi.documentation` to be set — otherwise bootstrap throws.
+
+### `scalar`
+
+Customise the Scalar runtime — override servers, change the reference path, configure authentication, intercept requests with `onBeforeRequest`. Detailed in [Scalar](/docs/documentation/scalar).
+
+## Programmatic OpenAPI
+
+`generateOpenApiDocument(controllers, options)` is exported separately if you want to build the spec without starting the server:
+
+```ts
+import { generateOpenApiDocument } from 'exjs-controllers/openapi/generateOpenApiDocument'
+
+const document = generateOpenApiDocument([UsersController], options)
+await writeFile('openapi.json', JSON.stringify(document, null, 2))
+```

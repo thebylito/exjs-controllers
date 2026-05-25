@@ -1,0 +1,4 @@
+{
+  "title": "Configuration",
+  "pages": ["configure-application", "controller-discovery"]
+}

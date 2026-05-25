@@ -1,0 +1,105 @@
+---
+title: '@Authorized & Principals'
+description: Protect routes with required permissions, restrict allowed principal kinds and inject the resolved principal into handlers.
+icon: ShieldCheck
+---
+
+Routes opt into authentication via two complementary decorators:
+
+- **`@Authorized(...permissions)`** — gates the route on a list of permissions and, optionally, allowed principal kinds.
+- **`@CurrentUser()` / `@CurrentApiKey()`** — injects the resolved principal as a handler argument.
+
+Either one is enough to mount the authentication middleware on the route — you can use them independently or together.
+
+## `@Authorized(...permissions)`
+
+```ts
+import { Authorized } from 'exjs-controllers/decorators/Authorized'
+
+@JsonController('/admin')
+class AdminController {
+  @Authorized('admin:read')
+  @Get('/users')
+  list() { /* ... */ }
+
+  @Authorized('admin:write')
+  @Delete('/users/:id')
+  remove(@Param('id') id: string) { /* ... */ }
+}
+```
+
+Permissions are passed verbatim as `requiredPermissions` to your `authorizationChecker`. The semantics — exact match, prefix match, scope hierarchy, etc. — are entirely up to your implementation.
+
+### Restricting principal kinds
+
+The object form lets you also restrict which principal kinds may call the route:
+
+```ts
+@Authorized({
+  permissions: ['orders:read'],
+  kinds: ['api-key']           // only machine clients
+})
+@Get('/orders')
+list() { /* ... */ }
+```
+
+Acceptable values are `'user'` and `'api-key'`. When omitted, both kinds are accepted.
+
+### Calling `@Authorized` with no permissions
+
+`@Authorized()` (no arguments) is a valid declaration — the route still requires a valid principal, just without any specific permission check.
+
+## `@CurrentUser` and `@CurrentApiKey`
+
+Inject the resolved principal into a handler argument.
+
+```ts
+import { CurrentUser, CurrentApiKey } from 'exjs-controllers/decorators/CurrentUser'
+
+@Get('/me')
+me(@CurrentUser() user: AuthenticatedUser) {
+  return user
+}
+
+@Get('/jobs')
+@Authorized('jobs:enqueue')
+enqueue(@CurrentApiKey() apiKey: ApiKey) {
+  return { actor: apiKey.id }
+}
+```
+
+Both decorators accept `{ optional?: boolean }`. When `optional: true`, missing or wrong-kind principals resolve to `undefined` instead of throwing.
+
+```ts
+@Get('/me-or-anon')
+maybeMe(@CurrentUser({ optional: true }) user?: AuthenticatedUser) {
+  return user ?? { anonymous: true }
+}
+```
+
+<Callout title="Kind mismatch">
+  Asking for a `user` when the resolved principal is an `api-key` (or vice versa) results in a `403 Forbidden` — unless you opted in with `{ optional: true }`.
+</Callout>
+
+## Lifecycle summary
+
+For each protected route, the framework runs this middleware before the handler:
+
+1. Call `currentUserChecker({ request, response })`.
+2. If it throws → respond `401`.
+3. If it returns `null`:
+   - Route has `@Authorized` → respond `401`.
+   - Route only declares `@CurrentUser({ optional: true })` → continue, principal is `undefined`.
+4. If a principal is resolved, check `allowedKinds` (from `@Authorized` and/or principal decorators).
+5. Call `authorizationChecker(action, principal, kind, requiredPermissions)`.
+6. If the checker returns anything other than `true` → respond `403`.
+7. Attach the resolved principal to the request and continue.
+
+## OpenAPI integration
+
+When a route is protected, the generated OpenAPI operation includes a `security` block that:
+
+- Lists every security scheme whose `kinds` intersect with the route's allowed kinds.
+- Uses the route's `permissions` array as the scope list per scheme.
+
+Combined with the schemes you declare in `openApiSecuritySchemes`, this is enough for Scalar (or any OpenAPI viewer) to render the right "Authorize" buttons and gate "Send Request" on a valid token. See [OpenAPI](/docs/documentation/openapi) and [Scalar](/docs/documentation/scalar) for the rest of the wiring.

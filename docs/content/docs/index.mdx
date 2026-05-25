@@ -1,0 +1,133 @@
+---
+title: Introduction
+description: Declarative controllers, DTO validation, dependency injection, OpenAPI generation and Express bootstrap for TypeScript APIs.
+icon: Lightning
+---
+
+# exjs-controllers
+
+`exjs-controllers` is a thin, decorator-based framework on top of **Express 5** and **Zod 4**. It lets you describe HTTP APIs as classes with explicit metadata — controllers, parameters, DTOs, authorization, and use cases — and bootstraps the whole application (including OpenAPI 3.1 and Scalar) with a single `configureApplication` call.
+
+<OverviewCards />
+
+## Install
+
+<CodeBlockTabs defaultValue="npm">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="npm">npm</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="pnpm">pnpm</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="yarn">yarn</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="bun">bun</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+
+  <CodeBlockTab value="npm">
+
+```bash
+npm install exjs-controllers express zod
+```
+
+  </CodeBlockTab>
+
+  <CodeBlockTab value="pnpm">
+
+```bash
+pnpm add exjs-controllers express zod
+```
+
+  </CodeBlockTab>
+
+  <CodeBlockTab value="yarn">
+
+```bash
+yarn add exjs-controllers express zod
+```
+
+  </CodeBlockTab>
+
+  <CodeBlockTab value="bun">
+
+```bash
+bun add exjs-controllers express zod
+```
+
+  </CodeBlockTab>
+</CodeBlockTabs>
+
+Peer dependencies: `express ^5`, `zod ^4`. Node.js `>=20`.
+
+## Why exjs-controllers
+
+- **Express, not against it.** Routes, middlewares and error handlers are plain Express — controllers register through the same `app.get/post/...` surface.
+- **Schema-first DTOs.** `BaseSchema` + `@Field(z....)` describe both the runtime validation and the OpenAPI shape.
+- **Real DI.** Singleton-by-default container with constructor `@Inject(token)` support, no reflect-metadata required.
+- **Auth without lock-in.** You provide `currentUserChecker` and `authorizationChecker`; the framework only orchestrates them and emits the security blocks in OpenAPI.
+
+<Callout title="Status">
+  Public API current as of version `0.4.0`. The library targets the modern (TC39) decorator proposal and continues to accept legacy experimental decorators for older builds.
+</Callout>
+
+## Get Started
+
+<SetupSteps />
+
+## Public Entry Points
+
+<ExportGrid />
+
+## Minimal Server
+
+```ts
+import { z } from 'zod'
+import { createApplication } from 'exjs-controllers/http/application'
+import { configureApplication } from 'exjs-controllers/config/configureApplication'
+import { Controller } from 'exjs-controllers/decorators/Controller'
+import { Get } from 'exjs-controllers/decorators/HttpMethod'
+import { Field } from 'exjs-controllers/decorators/Field'
+import { BaseSchema } from 'exjs-controllers/schemas/BaseSchema'
+
+class HealthOutput extends BaseSchema {
+  @Field(z.string())
+  status!: string
+}
+
+@Controller('/health')
+class HealthController {
+  @Get('/', { outputClass: HealthOutput, summary: 'Health check', tags: ['health'] })
+  getHealth(): HealthOutput {
+    return HealthOutput.create({ status: 'ok' })
+  }
+}
+
+const app = createApplication()
+
+await configureApplication(app, {
+  controllers: [HealthController],
+  openapi: {
+    documentation: { info: { title: 'Example API', version: '1.0.0' } }
+  },
+  enableScalar: true
+})
+
+app.listen(3000)
+```
+
+## What You Get
+
+<FeatureGrid />
+
+## Next Reading
+
+<Cards>
+  <Card title="Getting Started" href="/docs/core/getting-started">
+    TypeScript configuration, a runnable bootstrap and the project layout `exjs-controllers` expects.
+  </Card>
+  <Card title="Controllers" href="/docs/core/controllers">
+    `@Controller`, `@JsonController` and the HTTP method decorators with their `RouteOptions`.
+  </Card>
+  <Card title="DTOs" href="/docs/core/dtos">
+    Declare request and response shapes with `BaseSchema` + `@Field`, with full inheritance support.
+  </Card>
+  <Card title="OpenAPI" href="/docs/documentation/openapi">
+    How route metadata is turned into a 3.1 document and how to enrich it with security schemes.
+  </Card>
+</Cards>

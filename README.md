@@ -340,24 +340,23 @@ class CreateUserUseCase implements UseCase<CreateUserInput, UserOutput> {
 }
 ```
 
-### `@ExecuteUseCase(property)`
+### Calling a use case from a controller
 
-In a controller method, automatically dispatches the resolved input to a use case held in `this[property]`.
+Inject the use case via `@Inject`, then call `execute(input)` directly from the handler. Any additional arguments forwarded to `execute` will reach the underlying method.
 
 ```ts
 @Controller('/users')
 class UsersController {
-  constructor(private readonly createUser: CreateUserUseCase) {}
+  constructor(
+    @Inject(CreateUserUseCase) private readonly createUser: CreateUserUseCase,
+  ) {}
 
   @Post('/', { inputClass: CreateUserInput })
-  @ExecuteUseCase('createUser')
-  create(@Body(CreateUserInput) input: CreateUserInput): CreateUserInput {
-    return input // returned value is passed to createUser.execute(input)
+  create(@Body(CreateUserInput) input: CreateUserInput) {
+    return this.createUser.execute(input)
   }
 }
 ```
-
-Extra arguments after the first `BaseSchema` argument are forwarded to `execute(input, ...extraArgs)`.
 
 ### `UseCase<TInput, TOutput>` interface
 

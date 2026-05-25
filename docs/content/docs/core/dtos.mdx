@@ -1,0 +1,122 @@
+---
+title: DTOs & Validation
+description: Declare request and response shapes with BaseSchema and Zod-backed @Field decorators.
+icon: BracketsCurly
+---
+
+DTOs (Data Transfer Objects) live at the heart of `exjs-controllers`. They are plain classes that extend `BaseSchema` and declare each property with `@Field(zodSchema)`. The same definition is used for:
+
+1. Hydrating request bodies (`@Body(Class)`)
+2. Runtime validation (`instance.validate()`)
+3. Use-case input validation (`@DefineUseCase`)
+4. OpenAPI schema generation (`inputClass` / `outputClass`)
+
+## `BaseSchema`
+
+```ts
+import { z } from 'zod'
+import { BaseSchema } from 'exjs-controllers/schemas/BaseSchema'
+import { Field } from 'exjs-controllers/decorators/Field'
+
+class CreateUserInput extends BaseSchema {
+  @Field(z.string().min(1))
+  name!: string
+
+  @Field(z.string().email())
+  email!: string
+}
+```
+
+### Static helpers
+
+```ts
+// Build an instance with optional initial data.
+const input = CreateUserInput.create({ name: 'Alice', email: 'alice@example.com' })
+
+// Get the Zod object schema for the class.
+const schema = CreateUserInput.toZod()
+
+// Get the Zod schema for any BaseSchema subclass at runtime.
+import { classToZod } from 'exjs-controllers/core/ClassToZod'
+const dynamicSchema = classToZod(CreateUserInput)
+```
+
+### Instance helpers
+
+```ts
+// Merge partial data into an existing instance and return a refined type.
+input.merge({ name: 'Bob' })
+
+// Run validation. Throws ZodError if invalid. Wrapped in an OpenTelemetry span.
+input.validate()
+```
+
+## `@Field(schema)`
+
+The decorator can be applied to a class field in either decorator mode:
+
+```ts
+class ProductInput extends BaseSchema {
+  @Field(z.string().min(1))
+  sku!: string
+
+  @Field(z.number().int().nonnegative())
+  quantity!: number
+
+  @Field(z.array(z.string()))
+  tags!: string[]
+}
+```
+
+Use any Zod schema — including unions, refinements and `.transform()` — and the framework will both validate against it and emit the corresponding JSON Schema in the OpenAPI document.
+
+## Inheritance
+
+`@Field` definitions are collected by walking up the prototype chain. Parent fields are merged first; child fields override them. This makes shared base DTOs ergonomic.
+
+```ts
+class AuditedInput extends BaseSchema {
+  @Field(z.string())
+  createdBy!: string
+}
+
+class CreateAssetInput extends AuditedInput {
+  @Field(z.string())
+  assetTag!: string
+}
+
+// classToZod(CreateAssetInput).shape →
+// { createdBy: ZodString, assetTag: ZodString }
+```
+
+## Output DTOs
+
+Use the same `BaseSchema` machinery for response payloads. The framework does not validate outputs at runtime — `outputClass` is used solely for OpenAPI documentation.
+
+```ts
+class UserOutput extends BaseSchema {
+  @Field(z.string())
+  id!: string
+
+  @Field(z.string())
+  name!: string
+}
+
+@Get('/:id', { outputClass: UserOutput })
+findOne(@Param('id') id: string): UserOutput {
+  return UserOutput.create({ id, name: 'Alice' })
+}
+```
+
+For collection responses, mark the route with `outputIsArray: true`:
+
+```ts
+@Get('/', { outputClass: UserOutput, outputIsArray: true })
+list(): UserOutput[] {
+  return users.map((user) => UserOutput.create(user))
+}
+```
+
+## Validation errors
+
+`input.validate()` throws a `ZodError` directly. When a DTO is the input to a use case decorated with `@DefineUseCase`, that `ZodError` is wrapped into a `UseCaseInputValidationError` with `statusCode: 422`. See [Use Cases](/docs/core/use-cases) for the full flow.

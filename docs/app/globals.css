@@ -1,0 +1,36 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+:root {
+  color-scheme: light dark;
+}
+
+@theme {
+  --color-fd-primary: #ad9c1a;
+  --color-fd-primary-foreground: #fcfcea;
+
+  --color-fd-accent: #eff19a80;
+  --color-fd-accent-foreground: #372b0c;
+
+  --color-fd-ring: #ccc322;
+}
+
+.dark {
+  --color-fd-primary: #e1dc41;
+  --color-fd-primary-foreground: #372b0c;
+
+  --color-fd-accent: #ad9c1a4d;
+  --color-fd-accent-foreground: #f5f7cb;
+
+  --color-fd-ring: #e1dc41;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0 !important;
+  --removed-body-scroll-bar-size: 0 !important;
+}

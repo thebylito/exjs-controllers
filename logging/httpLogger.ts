@@ -74,21 +74,13 @@ export function createHttpLoggerMiddleware(
 
     ctx.response.setHeader('x-correlation-id', correlationId)
 
-    let logged = false
     const writeLog = () => {
-      if (logged) return
-      logged = true
       requestContext.logger.info(
         buildHttpLogPayload(ctx.request, ctx.response, correlationId),
       )
     }
 
-    ctx.response.once('finish', writeLog)
-    ctx.response.once('close', () => {
-      if (!ctx.response.writableFinished) {
-        writeLog()
-      }
-    })
+    ctx.response.once('close', writeLog)
 
     void runWithRequestLoggerContext(requestContext, async () => {
       next()

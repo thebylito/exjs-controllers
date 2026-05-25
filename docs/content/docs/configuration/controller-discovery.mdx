@@ -1,0 +1,83 @@
+---
+title: Controller Discovery
+description: Auto-load controllers from the file system instead of maintaining an explicit list.
+icon: Files
+---
+
+When `options.controllers` is empty, `configureApplication` falls back to discovery. The discovery walks one or more directories and `import()`s every file whose name ends with `.controller.<ext>`.
+
+## Naming convention
+
+| Pattern                 | Loaded? |
+| ----------------------- | ------- |
+| `users.controller.ts`   | yes     |
+| `orders.controller.mts` | yes     |
+| `legacy.controller.js`  | yes     |
+| `users.service.ts`      | no      |
+| `users.ts`              | no      |
+
+Accepted extensions: `.ts`, `.mts`, `.cts`, `.js`, `.mjs`, `.cjs`.
+
+A file's exports are inspected — only values that are functions **and** carry controller metadata (i.e. were decorated with `@Controller` or `@JsonController`) are considered controllers.
+
+## Default behaviour
+
+```ts
+await configureApplication(app, {
+  // controllers: omitted
+  controllerDiscovery: {
+    rootDir: process.cwd(),
+    directories: ['src', 'dist/src']
+  }
+})
+```
+
+Defaults:
+
+- `rootDir` → `process.cwd()`
+- `directories` → `['src', 'dist/src']`
+
+The first matching directories (relative to `rootDir`) are walked recursively in alphabetical order. If none of them exist on disk, discovery throws:
+
+```txt
+[ControllerDiscovery] Nenhum diretório de busca foi encontrado a partir de <rootDir>
+```
+
+If the directories exist but no decorated controller is exported:
+
+```txt
+[ControllerDiscovery] Nenhum controller decorado foi encontrado nos diretórios: <list>
+```
+
+## Customising the search
+
+```ts
+controllerDiscovery: {
+  rootDir: import.meta.dirname,
+  directories: ['features', 'plugins']
+}
+```
+
+Use this when controllers live under unusual paths — for example a monorepo package or a generated `dist/` tree. Both `src` (TypeScript) and `dist/src` (compiled JS) being in the default list makes the same configuration work whether you run `ts-node`/`tsx` or precompiled output.
+
+<Callout title="Side-effect free imports">
+  Discovery uses dynamic `import()`. Make sure your controller files do not perform side effects at import time beyond declaring classes — registering a route here, opening a connection there. Otherwise discovery may execute that work twice (once when run by tooling, again when the server boots).
+</Callout>
+
+## Programmatic use
+
+`discoverControllers(options)` is exported in case you want to run discovery outside of bootstrap (e.g. to generate the OpenAPI document from a CLI):
+
+```ts
+import { discoverControllers } from 'exjs-controllers/core/discoverControllers'
+import { generateOpenApiDocument } from 'exjs-controllers/openapi/generateOpenApiDocument'
+
+const controllers = await discoverControllers({
+  rootDir: process.cwd(),
+  directories: ['src']
+})
+
+const document = generateOpenApiDocument(controllers, {
+  openapi: { documentation: { info: { title: 'CLI', version: '1.0.0' } } }
+})
+```

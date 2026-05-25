@@ -1,0 +1,126 @@
+---
+title: Use Cases
+description: Encapsulate business logic in classes with automatic input validation and tracing.
+icon: Lightning
+---
+
+A **use case** is a class that owns the business logic for a single operation. `exjs-controllers` provides:
+
+- `UseCase<TInput, TOutput>` — the contract.
+- `@DefineUseCase()` — class decorator that wraps `execute(input)` with validation and OpenTelemetry tracing.
+
+Controllers call use cases directly — inject them with `@Inject(...)` and dispatch `execute(input)` from your handler.
+
+## Contract
+
+```ts
+import type { BaseSchema } from 'exjs-controllers/schemas/BaseSchema'
+
+interface UseCase<TInput extends BaseSchema, TOutput> {
+  execute(input: TInput, ...args: unknown[]): TOutput | Promise<TOutput>
+}
+```
+
+## `@DefineUseCase()`
+
+Decorate the use-case class. The decorator replaces `execute` so that every invocation:
+
+1. Asserts the first argument is a `BaseSchema` instance — otherwise throws `[UseCase] First argument for <name>.execute is required and must extend BaseSchema.`
+2. Calls `input.validate()`. On a `ZodError`, a `UseCaseInputValidationError` is thrown — it has `statusCode: 422` and exposes `error.issues`.
+3. Runs the original `execute` inside an OpenTelemetry span named `<ClassName>.execute`, with attributes including `exjs.use_case.name`.
+
+```ts
+import { z } from 'zod'
+import { Injectable } from 'exjs-controllers/decorators/DependencyInjection'
+import { DefineUseCase } from 'exjs-controllers/decorators/DefineUseCase'
+import { Field } from 'exjs-controllers/decorators/Field'
+import { BaseSchema } from 'exjs-controllers/schemas/BaseSchema'
+import type { UseCase } from 'exjs-controllers/core/UseCase'
+
+class CreateUserInput extends BaseSchema {
+  @Field(z.string().min(1))
+  name!: string
+
+  @Field(z.string().email())
+  email!: string
+}
+
+class UserOutput extends BaseSchema {
+  @Field(z.string())
+  id!: string
+
+  @Field(z.string())
+  name!: string
+}
+
+@Injectable()
+@DefineUseCase()
+export class CreateUserUseCase implements UseCase<CreateUserInput, UserOutput> {
+  async execute(input: CreateUserInput): Promise<UserOutput> {
+    // input.validate() already ran here
+    return UserOutput.create({ id: crypto.randomUUID(), name: input.name })
+  }
+}
+```
+
+Extra arguments passed after `input` (e.g. `execute(input, tenantId)`) are forwarded transparently to the original method.
+
+## Calling a use case from a controller
+
+Inject the use case into the controller and call `execute(input)` directly. No additional decorator is needed.
+
+```ts
+import { JsonController } from 'exjs-controllers/decorators/Controller'
+import { Post } from 'exjs-controllers/decorators/HttpMethod'
+import { Body } from 'exjs-controllers/decorators/Params'
+import { Inject } from 'exjs-controllers/decorators/DependencyInjection'
+
+@JsonController('/users')
+export class UsersController {
+  constructor(
+    @Inject(CreateUserUseCase) private readonly createUser: CreateUserUseCase
+  ) {}
+
+  @Post('/', { inputClass: CreateUserInput, outputClass: UserOutput })
+  create(@Body(CreateUserInput) input: CreateUserInput): Promise<UserOutput> {
+    return this.createUser.execute(input)
+  }
+}
+```
+
+You can forward extra arguments to `execute` — say, a tenant id parsed from the URL:
+
+```ts
+@Post('/:tenantId/users')
+create(
+  @Body(CreateUserInput) input: CreateUserInput,
+  @Param('tenantId') tenantId: string
+): Promise<UserOutput> {
+  return this.createUser.execute(input, tenantId)
+}
+```
+
+## Validation error
+
+`UseCaseInputValidationError` is exported from `exjs-controllers/core/UseCase`. Catch it in your global error handler to return a structured 422:
+
+```ts
+import { UseCaseInputValidationError } from 'exjs-controllers/core/UseCase'
+
+errorHandler: (error, _request, response, _next) => {
+  if (error instanceof UseCaseInputValidationError) {
+    response.status(422).json({
+      message: error.message,
+      issues: error.issues
+    })
+    return
+  }
+  response.status(500).json({ message: 'Internal Server Error' })
+}
+```
+
+## Why use cases?
+
+- **Single responsibility** — the controller deals with HTTP, the use case deals with business logic.
+- **Testable** — instantiate the use case directly, call `execute(input)`, assert on the result; no Express, no DI container required.
+- **Tracing for free** — every `execute` shows up as its own OpenTelemetry span, attributed to the use case name.

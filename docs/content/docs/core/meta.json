@@ -1,0 +1,11 @@
+{
+  "title": "Core",
+  "pages": [
+    "getting-started",
+    "controllers",
+    "parameters",
+    "dtos",
+    "dependency-injection",
+    "use-cases"
+  ]
+}

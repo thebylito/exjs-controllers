@@ -1,0 +1,91 @@
+---
+title: Dependency Injection
+description: Lightweight container with @Injectable and constructor @Inject decorators.
+icon: Cube
+---
+
+`exjs-controllers` ships a small DI container used to instantiate controllers and their dependencies. Controllers themselves do **not** need to be marked with `@Injectable` — the container instantiates them on demand.
+
+```ts
+import { Injectable, Inject } from 'exjs-controllers/decorators/DependencyInjection'
+
+@Injectable()
+class UsersRepository {
+  findAll() { /* ... */ }
+}
+
+@Injectable()
+class UsersService {
+  constructor(
+    @Inject(UsersRepository) private readonly repository: UsersRepository
+  ) {}
+}
+```
+
+## `@Injectable(options?)`
+
+Marks a class as resolvable by the container.
+
+```ts
+interface InjectableOptions {
+  /** Default: true. When false, a new instance is created on every resolution. */
+  singleton?: boolean
+}
+```
+
+```ts
+@Injectable()                       // singleton (default)
+class CacheService {}
+
+@Injectable({ singleton: false })   // new instance each time
+class RequestScoped {}
+```
+
+## `@Inject(token)`
+
+Used on constructor parameters to request a specific class. This is required because the framework does not rely on `emitDecoratorMetadata` — there is no automatic type-based resolution.
+
+```ts
+@Injectable()
+class OrdersService {
+  constructor(
+    @Inject(OrdersRepository) private readonly repository: OrdersRepository,
+    @Inject(AuditLog) private readonly audit: AuditLog
+  ) {}
+}
+```
+
+`InjectionToken` is simply `new (...args: any[]) => T` — any class can be a token.
+
+<Callout title="Constructor only">
+  `@Inject` is constructor-parameter-only. Property and method injection are not supported.
+</Callout>
+
+## Resolution rules
+
+- The container resolves dependencies recursively starting from the controller.
+- Singletons are cached in a module-level `Map`; the same instance is reused everywhere.
+- **Circular dependencies** are detected and rejected with an error that prints the full path (`A -> B -> A`).
+- Classes that have **no** `@Injectable` metadata still resolve — they just default to non-singleton and are instantiated with no constructor arguments unless `@Inject` declarations exist.
+
+## Resolving manually
+
+`resolveDependency(Class)` is exported in case you need to grab an instance outside of a controller (e.g. in scripts or background workers):
+
+```ts
+import { resolveDependency } from 'exjs-controllers/core/DependencyContainer'
+
+const service = resolveDependency(UsersService)
+```
+
+### Resetting the container (tests)
+
+```ts
+import { resetDependencyContainerForTests } from 'exjs-controllers/core/DependencyContainer'
+
+beforeEach(() => {
+  resetDependencyContainerForTests()
+})
+```
+
+This clears the singleton cache so each test starts from a clean slate.

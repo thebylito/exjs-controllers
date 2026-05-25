@@ -1,0 +1,129 @@
+---
+title: Controllers & Routes
+description: Class-based controllers, JSON controllers and HTTP method decorators with route-level metadata.
+icon: CompassTool
+---
+
+A **controller** is a class decorated with `@Controller` or `@JsonController`. Each method decorated with `@Get`, `@Post`, `@Put`, `@Patch` or `@Delete` is registered as an Express route under the controller's prefix.
+
+```ts
+import { JsonController } from 'exjs-controllers/decorators/Controller'
+import { Get, Post } from 'exjs-controllers/decorators/HttpMethod'
+
+@JsonController('/users')
+class UsersController {
+  @Get('/')
+  list() {
+    return [{ id: '1' }]
+  }
+
+  @Post('/')
+  create() {
+    return { created: true }
+  }
+}
+```
+
+## `@Controller(prefix)`
+
+Registers a class as a controller. All routes inside the class are mounted under `prefix`.
+
+```ts
+@Controller('/users')
+class UsersController { /* ... */ }
+```
+
+The handler return value is sent with `res.send(result)`. Strings are sent as `text/plain`.
+
+## `@JsonController(prefix)`
+
+Like `@Controller`, but the framework forces `application/json` for every handler return:
+
+- Object/array results are sent with `res.json(result)`.
+- String results that happen to be valid JSON are parsed and re-serialized.
+- A request-scoped JSON body parser is also mounted automatically on the controller's prefix.
+
+```ts
+@JsonController('/api/v1/users')
+class UsersController { /* ... */ }
+```
+
+## Route decorators
+
+```ts
+@Get(path, options?)
+@Post(path, options?)
+@Put(path, options?)
+@Patch(path, options?)
+@Delete(path, options?)
+```
+
+Express 5 path syntax applies — including `:param` and `*` segments. The resulting registered path is `controllerPrefix + routePath`, normalized to remove duplicate slashes.
+
+```ts
+@Controller('/orders')
+class OrdersController {
+  @Get('/:id')
+  findOne() { /* GET /orders/:id */ }
+
+  @Patch('/:id/status')
+  updateStatus() { /* PATCH /orders/:id/status */ }
+}
+```
+
+<Callout title="Duplicate routes">
+  Registering the same `METHOD path` twice — even from different controllers — throws at bootstrap time. The framework keeps an internal `Set` of registered routes to surface conflicts early.
+</Callout>
+
+## `RouteOptions`
+
+| Property         | Type                  | Description                                                                                          |
+| ---------------- | --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `inputClass`     | `typeof BaseSchema`   | DTO class used to document the request body (`requestBody.content['application/json'].schema`).      |
+| `outputClass`    | `typeof BaseSchema`   | DTO class used to document the `200` response body.                                                  |
+| `outputIsArray`  | `boolean`             | When `true`, the OpenAPI response schema is `{ type: 'array', items: <outputClass> }`.               |
+| `summary`        | `string`              | Short, single-line description shown in the OpenAPI docs / Scalar UI.                                |
+| `description`    | `string`              | Long-form description.                                                                                |
+| `tags`           | `string[]`            | OpenAPI tags. Useful for grouping operations in Scalar.                                              |
+
+```ts
+@Get('/items', {
+  outputClass: ItemOutput,
+  outputIsArray: true,
+  summary: 'List all items',
+  description: 'Returns every item available to the caller, paginated by query string.',
+  tags: ['items']
+})
+listItems(): ItemOutput[] {
+  return items.map((item) => ItemOutput.create(item))
+}
+```
+
+## Response handling
+
+The route handler return value is what eventually reaches the wire. You can also write to the response directly via the raw `Response` — once headers are sent the framework will skip the auto-response step.
+
+```ts
+@Post('/files', { outputClass: FileOutput })
+async upload(@Res() res: HttpResponse, @Body() body: unknown): Promise<void> {
+  res.status(201)
+  res.setHeader('Location', '/files/abc')
+  res.json({ id: 'abc' })
+}
+```
+
+## Error handling
+
+Any exception thrown inside a handler is forwarded to Express through `next(error)`. Use a custom `errorHandler` middleware on [`configureApplication`](/docs/configuration/configure-application) to convert framework errors (e.g. `UnauthorizedError`, `ForbiddenError`, `UseCaseInputValidationError`) into HTTP responses.
+
+```ts
+await configureApplication(app, {
+  controllers,
+  errorHandler: (error, _request, response, _next) => {
+    const status = (error as { status?: number; statusCode?: number }).status
+      ?? (error as { statusCode?: number }).statusCode
+      ?? 500
+    response.status(status).json({ message: (error as Error).message })
+  }
+})
+```

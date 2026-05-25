@@ -1,0 +1,102 @@
+---
+title: Parameters
+description: Bind request data into handler arguments with parameter decorators.
+icon: BracketsCurly
+---
+
+Parameter decorators are applied to controller method arguments. They tell the router how to populate each position from the incoming request.
+
+```ts
+@Get('/users/:id')
+findOne(
+  @Param('id') id: string,
+  @QueryParam('expand') expand?: string,
+  @HeaderParam('x-trace-id') traceId?: string
+) {
+  return { id, expand, traceId }
+}
+```
+
+When **no** parameter decorator is present, the framework falls back to passing the raw `Request` as the single argument.
+
+## Reference
+
+| Decorator                | Binds to                                                                                              |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `@Body(schemaClass?)`    | `req.body`. If `schemaClass` is provided, the body is rehydrated into an instance of `schemaClass`.   |
+| `@Param(name)`           | `req.params[name]` (returns the first value when Express reports an array).                           |
+| `@QueryParam(name)`      | `req.query[name]`.                                                                                    |
+| `@QueryParams()`         | The whole `req.query` object.                                                                          |
+| `@HeaderParam(name)`     | `req.headers[name]`.                                                                                  |
+| `@Req()`                 | The raw Express `Request`, augmented with `locals` and `cookies`.                                     |
+| `@Res()`                 | The raw Express `Response`.                                                                           |
+| `@CurrentUser(options?)` | The resolved `user` principal — see [Authentication](/docs/authentication/configuration).             |
+| `@CurrentApiKey(options?)` | The resolved `api-key` principal.                                                                   |
+
+## `@Body(schemaClass?)`
+
+Without `schemaClass`, the raw JSON body is forwarded as-is. When you pass a DTO class, the framework constructs an instance via `Object.assign(new SchemaClass(), body)` so prototype methods (`validate`, `merge`, ...) are available inside the handler.
+
+```ts
+import { Body } from 'exjs-controllers/decorators/Params'
+
+@Post('/', { inputClass: CreateUserInput })
+create(@Body(CreateUserInput) input: CreateUserInput) {
+  input.validate() // throws ZodError if the payload is invalid
+  return { name: input.name }
+}
+```
+
+<Callout title="Validation is opt-in here">
+  `@Body(Class)` only hydrates the instance. Call `input.validate()` inside the handler, or dispatch the input to a use case decorated with `@DefineUseCase` (which validates automatically), to trigger Zod validation.
+</Callout>
+
+## Path and query
+
+```ts
+@Get('/:id')
+findOne(
+  @Param('id') id: string,
+  @QueryParam('expand') expand?: string,
+  @QueryParams() query: Record<string, unknown>
+) {
+  /* ... */
+}
+```
+
+`@Param` returns a string (the first value if Express reports an array). For everything beyond strings, parse the value inside the handler — there is no automatic coercion.
+
+## Headers and raw req/res
+
+```ts
+@Get('/me')
+me(
+  @HeaderParam('authorization') authorization: string | string[] | undefined,
+  @Req() request: HttpRequest,
+  @Res() response: HttpResponse
+) {
+  /* ... */
+}
+```
+
+`HttpRequest` is `express.Request` augmented with `locals: Record<string, unknown>` and `cookies: Record<string, string>` (the latter is populated when the cookie middleware is installed — see `createCookieMiddleware` in `exjs-controllers/http/cookies`).
+
+## Principal decorators
+
+`@CurrentUser` and `@CurrentApiKey` inject the resolved principal — they trigger the authentication middleware just like `@Authorized` does. By default they require a matching principal kind; pass `{ optional: true }` to allow `undefined` instead.
+
+```ts
+import { CurrentUser } from 'exjs-controllers/decorators/CurrentUser'
+
+@Get('/me')
+me(@CurrentUser() user: AuthenticatedUser) {
+  return user
+}
+
+@Get('/optional-user')
+maybeMe(@CurrentUser({ optional: true }) user?: AuthenticatedUser) {
+  return user ?? { anonymous: true }
+}
+```
+
+See [Authentication → @Authorized & principals](/docs/authentication/authorized) for the full flow.

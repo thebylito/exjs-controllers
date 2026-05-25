@@ -1,0 +1,131 @@
+---
+title: Authentication
+description: Plug your own principal resolver and authorization checker. Document the security schemes once and let routes opt in.
+icon: Lock
+---
+
+`exjs-controllers` does **not** ship with an auth backend. Instead it exposes an `AuthenticationConfig` contract that you implement — typically by talking to your OAuth2 provider, JWT verifier, database session table or API-key store.
+
+## The contract
+
+```ts title="exjs-controllers/core/authentication/types"
+export type PrincipalKind = 'user' | 'api-key'
+
+export type Action = {
+  request: Request
+  response: Response
+}
+
+export type ResolvedPrincipal<TPrincipal = unknown> = {
+  principal: TPrincipal
+  kind: PrincipalKind
+}
+
+export type AuthenticationConfig<TPrincipal = unknown> = {
+  currentUserChecker: (
+    action: Action
+  ) => Promise<ResolvedPrincipal<TPrincipal> | null | undefined>
+    | ResolvedPrincipal<TPrincipal>
+    | null
+    | undefined
+
+  authorizationChecker: (
+    action: Action,
+    principal: TPrincipal,
+    kind: PrincipalKind,
+    requiredPermissions: string[]
+  ) => Promise<boolean> | boolean
+
+  openApiSecuritySchemes: Record<string, OpenApiSecuritySchemeEntry>
+  scalarSecurityConfig?: ScalarSecurityConfig
+}
+```
+
+- **`currentUserChecker`** — inspects the request and returns the principal (with its kind), `null` if anonymous, or throws to surface an explicit authentication failure.
+- **`authorizationChecker`** — given a principal and the route's `requiredPermissions`, returns `true` to allow or `false` to forbid.
+- **`openApiSecuritySchemes`** — the security schemes that should appear in the generated OpenAPI document. Each entry can also declare which `PrincipalKind`s it covers, so the framework only emits the schemes relevant to each route.
+
+## Wire it up
+
+Pass the config to `configureApplication`:
+
+```ts
+await configureApplication(app, {
+  controllers,
+  authentication: {
+    currentUserChecker: async ({ request }) => {
+      const header = request.headers.authorization
+      if (!header?.startsWith('Bearer ')) return null
+
+      const token = header.slice('Bearer '.length)
+      const session = await sessions.verify(token)
+      if (!session) return null
+
+      return {
+        principal: { id: session.subject, scopes: session.scopes },
+        kind: 'user'
+      }
+    },
+
+    authorizationChecker: async (_action, principal, _kind, required) => {
+      if (required.length === 0) return true
+      return required.every((permission) => principal.scopes.includes(permission))
+    },
+
+    openApiSecuritySchemes: {
+      bearerAuth: {
+        scheme: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT'
+        },
+        kinds: ['user']
+      }
+    }
+  }
+})
+```
+
+## When does it run?
+
+The authentication middleware is mounted **only on routes that need it** — i.e. routes that use `@Authorized` or that ask for a principal via `@CurrentUser` / `@CurrentApiKey`. Other routes stay untouched and skip the cost of resolving a principal.
+
+If a protected route is registered without an `authentication` config, bootstrap throws:
+
+```txt
+[Authentication] A rota protegida UsersController.list exige authentication config no bootstrap.
+```
+
+## Error model
+
+Two error classes are exported from `exjs-controllers/core/authentication`:
+
+| Error                  | Status | Thrown when                                                                              |
+| ---------------------- | ------ | ---------------------------------------------------------------------------------------- |
+| `UnauthorizedError`    | `401`  | `currentUserChecker` throws, or returns `null`/`undefined` on a route that requires auth. |
+| `ForbiddenError`       | `403`  | Principal kind is not allowed, or `authorizationChecker` returns `false`.                 |
+
+Catch them in your global `errorHandler` to turn them into HTTP responses:
+
+```ts
+import {
+  UnauthorizedError,
+  ForbiddenError
+} from 'exjs-controllers/core/authentication'
+
+errorHandler: (error, _request, response, _next) => {
+  if (error instanceof UnauthorizedError) {
+    response.status(401).json({ message: error.message })
+    return
+  }
+  if (error instanceof ForbiddenError) {
+    response.status(403).json({ message: error.message })
+    return
+  }
+  response.status(500).json({ message: 'Internal Server Error' })
+}
+```
+
+## Multiple principal kinds
+
+`PrincipalKind` lets you support both user sessions and machine-to-machine API keys side by side. Tag each scheme with the kinds it can produce, and use `@Authorized({ kinds: [...] })` on routes to constrain who can call them. See [`@Authorized` and principals](/docs/authentication/authorized) for the full pattern.

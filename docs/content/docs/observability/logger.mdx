@@ -1,0 +1,127 @@
+---
+title: HTTP Logger
+description: Structured Pino-based request logger with correlation IDs and async-local context.
+icon: TerminalWindow
+---
+
+`exjs-controllers` ships a Pino-backed HTTP logger that:
+
+- Emits one structured event per request when the response closes.
+- Generates (or reuses) a correlation ID and echoes it via the `x-correlation-id` response header.
+- Stores a child logger in an `AsyncLocalStorage` context so any code path within the request can log without passing the logger around.
+
+## Enabling
+
+Pass `logger` to `configureApplication`. Use `false` to disable the middleware entirely.
+
+```ts
+await configureApplication(app, {
+  controllers,
+  logger: {} // defaults: JSON to stdout
+})
+```
+
+## Options
+
+```ts title="exjs-controllers/logging/httpLogger"
+interface HttpLoggerOptions {
+  logger?: Logger                       // bring your own pino instance
+  genCorrelationId?: () => string       // default: randomUUID
+  correlationIdHeaderName?: string      // default: 'x-correlation-id'
+  logFormat?: 'json' | 'pretty'         // default: 'json'
+  stream?: LogStream                    // custom destination
+  filePath?: string                     // also append every line to a file
+}
+```
+
+### Pretty output (development)
+
+```ts
+logger: { logFormat: 'pretty' }
+```
+
+This decorates each line into a multi-block format with timestamp, level, correlation ID, trace IDs and the HTTP request summary.
+
+### Writing to disk
+
+```ts
+logger: {
+  logFormat: 'pretty',
+  filePath: 'logs/app.log'    // appended; parent dir is created if missing
+}
+```
+
+When `filePath` is provided, output is fanned out to both the in-process stream and the file.
+
+### Bring your own Pino
+
+```ts
+import pino from 'pino'
+
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? 'info',
+  redact: ['req.headers.authorization']
+})
+
+await configureApplication(app, {
+  controllers,
+  logger: { logger }
+})
+```
+
+## Correlation IDs
+
+For every request the middleware:
+
+1. Reads the correlation ID from the first available header: the configured `correlationIdHeaderName`, `x-request-id`, then `x-transaction-id`.
+2. Generates a new one (`randomUUID`) if none is present.
+3. Sets `x-correlation-id` on the response so downstream callers can echo it back.
+4. Creates a Pino child logger bound to `{ correlationId }` and stores it in `AsyncLocalStorage`.
+
+## Logging from anywhere
+
+Import the `logger` proxy. Inside a request handler it resolves to the request-scoped child logger; outside, it falls back to the process-wide base logger.
+
+```ts
+import { logger } from 'exjs-controllers/logging/logger'
+
+logger.info({ userId: 'usr_123' }, 'User loaded')
+```
+
+### Helpers
+
+```ts
+import {
+  appendRequestLoggerBindings,
+  getCorrelationId
+} from 'exjs-controllers/logging/logger'
+
+// Attach extra structured fields to every subsequent log in this request.
+appendRequestLoggerBindings({ tenantId: 'acme' })
+
+// Read the active correlation ID.
+const cid = getCorrelationId()
+```
+
+## What gets logged per request
+
+```jsonc
+{
+  "level": 30,
+  "time": 1716480000000,
+  "correlationId": "8e7e...",
+  "httpRequest": {
+    "requestMethod": "GET",
+    "requestUrl": "/users/42",
+    "requestSize": "0",
+    "status": "200",
+    "userAgent": "curl/8.6.0",
+    "serverIp": "10.0.0.4",
+    "referrer": "-"
+  }
+}
+```
+
+`requestSize` falls back to `content-length`, then `Buffer.byteLength(body)` for string/object bodies, then `0`.
+
+`serverIp` comes from `response.socket.localAddress` (or `request.ip` as a fallback) — i.e. the local interface that handled the request.

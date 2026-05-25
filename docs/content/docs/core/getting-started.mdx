@@ -1,0 +1,136 @@
+---
+title: Getting Started
+description: Install exjs-controllers, set up TypeScript decorators, write your first controller and bootstrap the Express application.
+icon: Lightning
+---
+
+## Requirements
+
+- **Node.js** `>=20`
+- **TypeScript** `^6` with decorator metadata enabled
+- **Peers** — `express ^5`, `zod ^4`
+
+## TypeScript configuration
+
+`exjs-controllers` ships with both the modern (TC39) and legacy (`experimentalDecorators`) decorator implementations. Choose one and keep it consistent across your project.
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "experimentalDecorators": false,
+    "emitDecoratorMetadata": false,
+    "useDefineForClassFields": false
+  }
+}
+```
+
+<Callout title="Legacy decorators">
+  If your build pipeline pre-dates TC39 decorators, set `experimentalDecorators: true` and `emitDecoratorMetadata: true`. The decorators automatically detect which mode they are running under.
+</Callout>
+
+## Project layout
+
+`configureApplication` registers controllers from an explicit `controllers: [...]` list **or** auto-discovers them from one or more directories. The discovery uses the convention `*.controller.ts` (or `.js`/`.mjs`/...) to locate files.
+
+```txt
+src/
+  modules/
+    users/
+      users.controller.ts
+      users.service.ts
+      dtos/
+        create-user.input.ts
+        user.output.ts
+  server.ts
+```
+
+## Bootstrap
+
+```ts title="src/server.ts"
+import { createApplication } from 'exjs-controllers/http/application'
+import { configureApplication } from 'exjs-controllers/config/configureApplication'
+
+import { UsersController } from './modules/users/users.controller'
+
+const app = createApplication()
+
+await configureApplication(app, {
+  controllers: [UsersController],
+  openapi: {
+    documentation: {
+      info: { title: 'My API', version: '1.0.0' }
+    }
+  },
+  enableScalar: true
+})
+
+app.listen(3000, () => {
+  console.log('Listening on http://localhost:3000')
+})
+```
+
+`createApplication()` returns a typed wrapper around Express that exposes the underlying instance as `app.express` while keeping the surface area focused (`use`, `get`, `post`, `put`, `patch`, `delete`, `listen`, `address`, `close`).
+
+## Your first controller
+
+```ts title="src/modules/users/users.controller.ts"
+import { z } from 'zod'
+import { JsonController } from 'exjs-controllers/decorators/Controller'
+import { Get, Post } from 'exjs-controllers/decorators/HttpMethod'
+import { Body, Param } from 'exjs-controllers/decorators/Params'
+import { Field } from 'exjs-controllers/decorators/Field'
+import { BaseSchema } from 'exjs-controllers/schemas/BaseSchema'
+
+class CreateUserInput extends BaseSchema {
+  @Field(z.string().min(1))
+  name!: string
+
+  @Field(z.string().email())
+  email!: string
+}
+
+class UserOutput extends BaseSchema {
+  @Field(z.string())
+  id!: string
+
+  @Field(z.string())
+  name!: string
+
+  @Field(z.string())
+  email!: string
+}
+
+@JsonController('/users')
+export class UsersController {
+  @Get('/:id', { outputClass: UserOutput, summary: 'Get user' })
+  findOne(@Param('id') id: string): UserOutput {
+    return UserOutput.create({ id, name: 'Alice', email: 'alice@example.com' })
+  }
+
+  @Post('/', { inputClass: CreateUserInput, outputClass: UserOutput })
+  create(@Body(CreateUserInput) input: CreateUserInput): UserOutput {
+    input.validate()
+    return UserOutput.create({ id: '1', name: input.name, email: input.email })
+  }
+}
+```
+
+## Next steps
+
+<Cards>
+  <Card title="Controllers" href="/docs/core/controllers">
+    All controller and route decorators, with the full list of `RouteOptions`.
+  </Card>
+  <Card title="Parameters" href="/docs/core/parameters">
+    Bind body, params, query, headers, principals and the raw `Request`/`Response`.
+  </Card>
+  <Card title="DTOs" href="/docs/core/dtos">
+    `BaseSchema`, `@Field`, `create`/`merge`/`validate` and inheritance rules.
+  </Card>
+  <Card title="configureApplication" href="/docs/configuration/configure-application">
+    The complete `ExpressServerOptions` reference.
+  </Card>
+</Cards>

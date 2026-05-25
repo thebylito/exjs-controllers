@@ -1,0 +1,104 @@
+---
+title: Scalar
+description: Mount the Scalar API reference UI directly from configureApplication.
+icon: TerminalWindow
+---
+
+[Scalar](https://scalar.com) renders an interactive reference UI from any OpenAPI document. `exjs-controllers` bundles `@scalar/express-api-reference` and mounts it when you pass `enableScalar: true`.
+
+## Minimal setup
+
+```ts
+await configureApplication(app, {
+  controllers,
+  openapi: {
+    documentation: { info: { title: 'My API', version: '1.0.0' } }
+  },
+  enableScalar: true
+})
+```
+
+- The OpenAPI JSON is served at `openapi.documentPath` (default `/docs/openapi.json`).
+- The Scalar UI is served at `scalar.referencePath` (default `/docs`).
+- Scalar is configured to load the spec from `openapi.documentPath` and to use the current request origin as the API base URL — so the "Send Request" buttons work without extra setup.
+
+<Callout title="Requires OpenAPI">
+  `enableScalar: true` requires `openapi.documentation` to be set. Otherwise bootstrap throws: `enableScalar requires openapi documentation info to generate the reference document`.
+</Callout>
+
+## Customising the UI
+
+Pass a `scalar` object to override the defaults. Every field is forwarded to Scalar's runtime configuration.
+
+```ts
+await configureApplication(app, {
+  controllers,
+  openapi: {
+    documentation: { info: { title: 'My API', version: '1.0.0' } }
+  },
+  enableScalar: true,
+  scalar: {
+    referencePath: '/reference',
+    servers: [
+      { url: 'https://api.example.com', description: 'Production' },
+      { url: 'https://api.staging.example.com', description: 'Staging' }
+    ],
+    persistAuth: true,
+    oauth2RedirectUri: 'https://api.example.com/oauth2-redirect'
+  }
+})
+```
+
+When `scalar.servers` is omitted, the framework injects a single entry pointing at the request origin (`<protocol>://<host>`).
+
+## Authentication
+
+If you registered schemes through `authentication.openApiSecuritySchemes`, the framework pre-fills Scalar's auth panel:
+
+- The first registered scheme is selected as `preferredSecurityScheme` (unless you set one).
+- For OAuth2 schemes, every `authorizationCode` scope listed in the spec is pre-selected so users only have to flip the ones they care about.
+
+You can override every part of this via `scalar.authentication`:
+
+```ts
+scalar: {
+  authentication: {
+    preferredSecurityScheme: 'bearerAuth',
+    securitySchemes: {
+      bearerAuth: {
+        token: process.env.DEMO_TOKEN
+      }
+    }
+  }
+}
+```
+
+## Hooking into requests
+
+Use `onBeforeRequest` to mutate the request Scalar is about to send — handy for injecting tenant headers or signing requests against an internal proxy.
+
+```ts
+scalar: {
+  onBeforeRequest: ({ requestBuilder }) => {
+    requestBuilder.headers.set('x-tenant', 'demo')
+  }
+}
+```
+
+## Customising paths
+
+```ts
+await configureApplication(app, {
+  // ...
+  openapi: {
+    documentPath: '/internal/openapi.json',
+    documentation: { info: { title: 'My API', version: '1.0.0' } }
+  },
+  scalar: {
+    referencePath: '/reference'
+  },
+  enableScalar: true
+})
+```
+
+After this, the JSON is at `/internal/openapi.json` and the UI is at `/reference`.

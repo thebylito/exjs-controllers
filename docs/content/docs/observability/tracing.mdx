@@ -1,0 +1,88 @@
+---
+title: Tracing
+description: Wrap controller handlers, use cases and arbitrary methods in OpenTelemetry spans.
+icon: Waveform
+---
+
+Every controller handler runs inside an OpenTelemetry span automatically. Use cases decorated with `@DefineUseCase` add a nested span around `execute`. You can wrap any other method with `@TraceSpan` to keep the call graph complete.
+
+`exjs-controllers` depends only on `@opentelemetry/api` — bringing the **SDK** (NodeSDK, exporters, processors) is your responsibility. Without an SDK installed, span creation is a no-op.
+
+## Automatic spans
+
+| Span                                            | Attributes                                                                                                                                  |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ControllerName.handlerName` (per request)      | `http.method`, `http.route`, `http.controller.name`, `http.controller.handler`, `http.handler.name`, `http.handler.method`                  |
+| `UseCaseName.execute` (per `@DefineUseCase`)    | `exjs.handler.name`, `exjs.handler.method`, `exjs.use_case.name`, `exjs.use_case.method`                                                    |
+| `BaseSchema.validate` (per `instance.validate`) | (defaults)                                                                                                                                  |
+
+Exceptions thrown inside the wrapped function are recorded on the span and the status is marked as `ERROR` before being rethrown — so failures show up cleanly in your tracing backend.
+
+## `@TraceSpan(name?, options?)`
+
+Wrap any method with a custom span. Works on controllers, services, repositories or use cases.
+
+```ts
+import { TraceSpan } from 'exjs-controllers/decorators/TraceSpan'
+
+class UsersRepository {
+  @TraceSpan('UsersRepository.findAll')
+  async findAll() { /* ... */ }
+
+  @TraceSpan('UsersRepository.findOne', {
+    attributes: { 'db.system': 'postgresql' }
+  })
+  async findOne(id: string) { /* ... */ }
+}
+```
+
+If `name` is omitted, the span name defaults to `<ClassName>.<methodName>`.
+
+## `runWithSpan` and `runWithControllerSpan`
+
+For ad-hoc wrapping, use the helpers directly.
+
+```ts
+import {
+  runWithSpan,
+  runWithControllerSpan
+} from 'exjs-controllers/observability/tracing'
+
+await runWithSpan(
+  { name: 'syncProducts', attributes: { 'job.kind': 'scheduled' } },
+  () => syncProducts()
+)
+```
+
+Both helpers preserve sync vs async behaviour — they return the original value type, end the span on success, and on failure record the exception and mark `SpanStatusCode.ERROR`.
+
+## Bringing an OpenTelemetry SDK
+
+Install `@opentelemetry/sdk-node` (or the browser equivalent) and start it before `configureApplication`:
+
+```ts title="src/telemetry.ts"
+import { NodeSDK } from '@opentelemetry/sdk-node'
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
+
+const sdk = new NodeSDK({
+  traceExporter: new OTLPTraceExporter({
+    url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT
+  })
+})
+
+await sdk.start()
+```
+
+```ts title="src/server.ts"
+import './telemetry' // must come first
+import { createApplication } from 'exjs-controllers/http/application'
+import { configureApplication } from 'exjs-controllers/config/configureApplication'
+
+const app = createApplication()
+await configureApplication(app, { /* ... */ })
+app.listen(3000)
+```
+
+## Tying logs and traces together
+
+The HTTP logger emits `correlationId` per request, and any active span carries its own `traceId` / `spanId` (read via `@opentelemetry/api`'s `trace.getActiveSpan()`). The pretty log formatter already surfaces `traceId` and `spanId` when present, so you can pivot from a log line straight to your tracing UI.

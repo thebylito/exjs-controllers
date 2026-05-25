@@ -1,0 +1,126 @@
+---
+title: OpenAPI
+description: Generate an OpenAPI 3.1 document from controllers, DTOs and authorization metadata.
+icon: FileCode
+---
+
+`exjs-controllers` generates an **OpenAPI 3.1.0** document directly from the metadata you declare on controllers and DTOs. There is no extra annotation step — `inputClass`, `outputClass`, `@Authorized`, `@Field` and parameter decorators are all the source of truth.
+
+## Built-in serving
+
+Pass `openapi.documentation.info` to `configureApplication` and the document is served at `/docs/openapi.json` (configurable via `openapi.documentPath`).
+
+```ts
+await configureApplication(app, {
+  controllers,
+  openapi: {
+    documentPath: '/openapi.json',
+    documentation: {
+      info: { title: 'My API', version: '1.0.0' }
+    }
+  }
+})
+```
+
+## Programmatic generation
+
+`generateOpenApiDocument(controllers, options)` returns the document as a plain object — useful for build-time spec generation:
+
+```ts
+import { writeFile } from 'node:fs/promises'
+import { generateOpenApiDocument } from 'exjs-controllers/openapi/generateOpenApiDocument'
+
+const document = generateOpenApiDocument([UsersController, OrdersController], {
+  openapi: { documentation: { info: { title: 'My API', version: '1.0.0' } } }
+})
+
+await writeFile('openapi.json', JSON.stringify(document, null, 2))
+```
+
+## Where each part comes from
+
+| Spec field                                                | Source                                                                                  |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `info`                                                    | `openapi.documentation.info`                                                            |
+| `paths['/...'].<method>.summary` / `description` / `tags` | `RouteOptions.summary` / `description` / `tags`                                         |
+| `paths['/...'].<method>.parameters`                       | `@Param`, `@QueryParam`, `@HeaderParam` (each with `schema: { type: 'string' }`)        |
+| `paths['/...'].<method>.requestBody`                      | `@Body(Class)` or `RouteOptions.inputClass` → Zod → JSON Schema                         |
+| `paths['/...'].<method>.responses['200']`                 | `RouteOptions.outputClass` (wrapped in an array when `outputIsArray` is `true`)         |
+| `paths['/...'].<method>.security`                         | `@Authorized` permissions + non-optional `@CurrentUser`/`@CurrentApiKey` kinds          |
+| `components.securitySchemes`                              | `openapi.documentation.components.securitySchemes` ∪ `authentication.openApiSecuritySchemes` |
+| `security`                                                | `openapi.documentation.security` (document-wide)                                        |
+
+Path parameters use Express syntax (`:id`) in your code; the generator rewrites them to OpenAPI syntax (`{id}`).
+
+## Schemas from DTOs
+
+The generator passes each `inputClass` / `outputClass` through `classToZod` and then through Zod's `z.toJSONSchema(schema, { target: 'openapi-3.0', unrepresentable: 'any' })`. This handles unions, refinements, defaults and discriminated unions out of the box — anything Zod can model.
+
+```ts
+class CreateUserInput extends BaseSchema {
+  @Field(z.string().min(1))
+  name!: string
+
+  @Field(z.string().email())
+  email!: string
+
+  @Field(z.array(z.string()).optional())
+  tags?: string[]
+}
+
+class UserOutput extends BaseSchema {
+  @Field(z.string())
+  id!: string
+
+  @Field(z.string())
+  name!: string
+}
+
+@Post('/', { inputClass: CreateUserInput, outputClass: UserOutput })
+create(@Body(CreateUserInput) input: CreateUserInput) { /* ... */ }
+```
+
+The resulting operation will document a JSON request body (with the right required fields) and a JSON `200` response.
+
+## Documenting security schemes
+
+There are two complementary ways to declare schemes:
+
+1. **`openapi.documentation.components.securitySchemes`** — anything you'd write by hand into the OpenAPI document.
+2. **`authentication.openApiSecuritySchemes`** — bound to your `AuthenticationConfig` so the framework knows which scheme covers which principal kind and can attach the right `security` block to each operation.
+
+The two are merged, with `authentication.openApiSecuritySchemes` taking precedence for collisions.
+
+```ts
+authentication: {
+  // ...
+  openApiSecuritySchemes: {
+    bearerAuth: {
+      scheme: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT'
+      },
+      kinds: ['user']
+    },
+    apiKey: {
+      scheme: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-API-Key'
+      },
+      kinds: ['api-key']
+    }
+  }
+}
+```
+
+A route declared as `@Authorized({ kinds: ['user'], permissions: ['orders:read'] })` will then get:
+
+```json
+{ "security": [{ "bearerAuth": ["orders:read"] }] }
+```
+
+## Inspecting the spec
+
+Once the server is running, the spec is at `GET /docs/openapi.json` (or your custom path). Pair it with the [Scalar UI](/docs/documentation/scalar) for an interactive reference.

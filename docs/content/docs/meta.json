@@ -1,0 +1,26 @@
+{
+  "title": "exjs-controllers",
+  "pages": [
+    "---Introduction---",
+    "index",
+    "---Core---",
+    "core/getting-started",
+    "core/controllers",
+    "core/parameters",
+    "core/dtos",
+    "core/dependency-injection",
+    "core/use-cases",
+    "---Authentication---",
+    "authentication/configuration",
+    "authentication/authorized",
+    "---Configuration---",
+    "configuration/configure-application",
+    "configuration/controller-discovery",
+    "---Documentation---",
+    "documentation/openapi",
+    "documentation/scalar",
+    "---Observability---",
+    "observability/logger",
+    "observability/tracing"
+  ]
+}
