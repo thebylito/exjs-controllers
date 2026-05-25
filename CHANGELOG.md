@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.5.0] — 2026-05-24
+
+### Breaking
+
+- **Removido `@ExecuteUseCase(property)`**. O decorator de controller que dispachava o input para `this[property].execute(input)` foi retirado. Substituição: injete o use case com `@Inject(UseCase)` e chame `this.useCase.execute(input)` direto no handler.
+
+### Changed
+
+- **`logging/httpLogger`** — middleware agora escuta apenas o evento `'close'` do response (sem o `'finish' + 'close'` com flag de dedup anterior). Comportamento equivalente em produção em Express 5 / Node HTTP (o `'close'` sempre dispara após `'finish'` num response normal). Consumidores que testem o middleware emitindo `'finish'` em mocks precisam trocar por `'close'`.
+- **`tsconfig.json`** — `docs/` agora está em `exclude`, evitando que o build da lib tente compilar o site Fumadocs.
+
+### Added
+
+- **Site de documentação** em [`docs/`](https://github.com/thebylito/exjs-controllers/tree/main/docs) construído com Next.js + Fumadocs cobrindo: Getting Started, Controllers, Parameters, DTOs, Dependency Injection, Use Cases, Authentication, configureApplication, Controller Discovery, OpenAPI, Scalar, HTTP Logger e Tracing.
+
+[0.5.0]: https://github.com/thebylito/exjs-controllers/compare/v0.4.0...v0.5.0
+
+---
+
 ## [0.4.0] — 2026-05-21
 
 ### Breaking
