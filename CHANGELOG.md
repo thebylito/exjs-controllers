@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.7.0] — 2026-05-29
+
+### Added
+
+- **Upload de arquivos** — decorators `@UploadedFile(field, options?)` e `@UploadedFiles(field, options?)` (`decorators/Params`) integram o [multer](https://github.com/expressjs/multer) na rota automaticamente. O middleware roda depois do auth e antes do handler; sem `options` usa `memoryStorage` (arquivo em `buffer`). `options` aceita objeto ou factory (`storage`, `limits`, `fileFilter`). Tipos `UploadedFileInfo`, `UploadOptions` e `MulterUploadOptions` são auto-contidos e reexportados — não exige `@types/multer` no consumidor. O OpenAPI expõe a rota como `multipart/form-data` (campo binário), então o Scalar renderiza um seletor de arquivo.
+- **`logging/httpLogger`** — nova opção `levelFormat: 'label' | 'number'` (default `'number'`, mantendo o comportamento nativo do Pino). Com `'label'` o nível é serializado como string (`"level":"info"`) em vez do código numérico (`"level":30`), para agregadores que classificam a severidade pelo texto (ex.: Dokploy). Afeta apenas a saída JSON; o formato `pretty` sempre imprime o rótulo.
+
+### Changed
+
+- **Dependências** — adicionado `multer` (runtime) e `@types/multer` (dev) para o suporte a upload.
+
+[0.7.0]: https://github.com/thebylito/exjs-controllers/compare/v0.5.0...v0.7.0
+
+---
+
 ## [0.5.0] — 2026-05-24
 
 ### Breaking

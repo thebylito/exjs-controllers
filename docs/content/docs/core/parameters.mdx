@@ -32,6 +32,8 @@ When **no** parameter decorator is present, the framework falls back to passing 
 | `@Res()`                 | The raw Express `Response`.                                                                           |
 | `@CurrentUser(options?)` | The resolved `user` principal — see [Authentication](/docs/authentication/configuration).             |
 | `@CurrentApiKey(options?)` | The resolved `api-key` principal.                                                                   |
+| `@UploadedFile(field, options?)` | A single uploaded file from a `multipart/form-data` field (via [multer](https://github.com/expressjs/multer)). |
+| `@UploadedFiles(field, options?)` | All uploaded files from a `multipart/form-data` field (array).                                |
 
 ## `@Body(schemaClass?)`
 
@@ -100,3 +102,39 @@ maybeMe(@CurrentUser({ optional: true }) user?: AuthenticatedUser) {
 ```
 
 See [Authentication → @Authorized & principals](/docs/authentication/authorized) for the full flow.
+
+## File uploads
+
+`@UploadedFile` / `@UploadedFiles` wire [multer](https://github.com/expressjs/multer) into the route automatically. The middleware runs **after** authentication (so a multipart body is never parsed for an unauthorized caller) and **before** the handler. With no options the file is kept in memory, so `buffer` is populated.
+
+```ts
+import { UploadedFile, type UploadedFileInfo } from 'exjs-controllers/decorators/Params'
+
+@Controller('/imports')
+class ImportsController {
+  @Post('/')
+  upload(@UploadedFile('file') file: UploadedFileInfo) {
+    return this.service.import(file.buffer.toString('utf-8'))
+  }
+}
+```
+
+Pass `options` to configure multer — `storage`, `limits`, `fileFilter`. It accepts the options object directly or a factory (evaluated when the route is registered):
+
+```ts
+@Post('/large')
+uploadLarge(
+  @UploadedFile('file', { options: { limits: { fileSize: 16 * 1024 * 1024 } } })
+  file: UploadedFileInfo,
+) {
+  /* ... */
+}
+```
+
+Use `@UploadedFiles('field')` to bind an array of files from the same field. One upload param is supported per route.
+
+<Callout title="No @types/multer needed">
+  `UploadedFileInfo`, `UploadOptions` and `MulterUploadOptions` are self-contained types re-exported from `exjs-controllers/decorators/Params` (they mirror `Express.Multer.File` / multer's options) — consumers don't need to install `@types/multer`.
+</Callout>
+
+The OpenAPI document advertises the route as `multipart/form-data` with the field as a binary, so Scalar renders a file picker.

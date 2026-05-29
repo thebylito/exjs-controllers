@@ -233,6 +233,37 @@ function buildRequestBody(
   route: RouteMetadata,
   params: ParamMetadata[],
 ): OpenApiOperation['requestBody'] | undefined {
+  // Rotas com upload: requestBody multipart/form-data com os campos de
+  // arquivo como binário (Scalar renderiza um seletor de arquivo).
+  const uploadParams = params.filter(
+    (param) =>
+      param.type === 'uploaded-file' || param.type === 'uploaded-files',
+  )
+  if (uploadParams.length > 0) {
+    const properties: Record<string, JsonObject> = {}
+    const required: string[] = []
+    for (const param of uploadParams) {
+      if (!param.name) continue
+      properties[param.name] =
+        param.type === 'uploaded-files'
+          ? { type: 'array', items: { type: 'string', format: 'binary' } }
+          : { type: 'string', format: 'binary' }
+      if (param.optional !== true) required.push(param.name)
+    }
+    return {
+      required: true,
+      content: {
+        'multipart/form-data': {
+          schema: {
+            type: 'object',
+            properties,
+            ...(required.length > 0 ? { required } : {}),
+          } as JsonObject,
+        },
+      },
+    }
+  }
+
   const bodyParam = params.find((param) => param.type === 'body')
   const inputClass = bodyParam?.schemaClass ?? route.inputClass
   const schema = buildSchemaFromClass(inputClass, 'input')

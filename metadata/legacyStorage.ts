@@ -26,6 +26,56 @@ export type ParamType =
   | 'res'
   | 'current-user'
   | 'current-api-key'
+  | 'uploaded-file'
+  | 'uploaded-files'
+
+// Subconjunto estrutural das opções do multer. Tipado aqui (sem importar de
+// `multer`) porque @types/multer é devDependency da lib — referenciar os
+// tipos do multer na API pública quebraria o typecheck de quem consome a lib
+// sem esses types. `storage` fica como unknown: passa multer.diskStorage(...)
+// / memoryStorage() direto, resolvido em runtime.
+export interface MulterUploadOptions {
+  dest?: string
+  preservePath?: boolean
+  storage?: unknown
+  limits?: {
+    fieldNameSize?: number
+    fieldSize?: number
+    fields?: number
+    fileSize?: number
+    files?: number
+    parts?: number
+    headerPairs?: number
+  }
+  fileFilter?: (
+    req: unknown,
+    file: unknown,
+    callback: (error: Error | null, acceptFile?: boolean) => void,
+  ) => void
+}
+
+export interface UploadOptions {
+  // Opções repassadas ao multer nesta rota. Pode ser o objeto direto ou uma
+  // factory (avaliada no registro da rota). Sem isso, usa memoryStorage do
+  // multer (o arquivo fica em `buffer`).
+  options?: MulterUploadOptions | (() => MulterUploadOptions)
+}
+
+// Formato do arquivo injetado por @UploadedFile/@UploadedFiles (espelha o
+// Express.Multer.File, mas auto-contido para não exigir @types/multer no
+// consumidor). Com memoryStorage, `buffer` está presente; com diskStorage,
+// `path`/`filename`/`destination`.
+export interface UploadedFileInfo {
+  fieldname: string
+  originalname: string
+  encoding: string
+  mimetype: string
+  size: number
+  buffer: Buffer
+  destination?: string
+  filename?: string
+  path?: string
+}
 
 export interface ParamMetadata {
   index: number
@@ -33,6 +83,7 @@ export interface ParamMetadata {
   name?: string
   schemaClass?: new (...args: any[]) => object
   optional?: boolean
+  uploadOptions?: UploadOptions
 }
 
 export const legacyParamMap = new WeakMap<object, Map<string, ParamMetadata[]>>()

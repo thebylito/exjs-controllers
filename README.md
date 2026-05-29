@@ -140,6 +140,8 @@ Use these decorators on method parameters to bind request data automatically.
 | `@Req()` | The raw Express `Request` object |
 | `@Res()` | The raw Express `Response` object |
 | `@SessionContext()` | The authenticated session (`AuthenticationContext`) — throws `401` if no active session |
+| `@UploadedFile(field, options?)` | A single uploaded file from a `multipart/form-data` field (via [multer](https://github.com/expressjs/multer)) |
+| `@UploadedFiles(field, options?)` | All uploaded files from a `multipart/form-data` field (array) |
 
 ```ts
 @Controller('/orders')
@@ -162,6 +164,31 @@ class OrdersController {
 ```
 
 > `SessionContext` (the type) is re-exported from `exjs-controllers/decorators/Params` for convenience and is identical to `AuthenticationContext`.
+
+### File uploads
+
+`@UploadedFile` / `@UploadedFiles` wire [multer](https://github.com/expressjs/multer) into the route automatically. With no options the file is kept in memory (`buffer` is populated); pass `options` (object or factory) to configure multer — `storage`, `limits`, `fileFilter`. The OpenAPI document advertises the route as `multipart/form-data` with the field as a binary, so Scalar renders a file picker.
+
+```ts
+import { UploadedFile, type UploadedFileInfo } from 'exjs-controllers/decorators/Params'
+
+@Controller('/imports')
+class ImportsController {
+  @Post('/')
+  upload(@UploadedFile('file') file: UploadedFileInfo) {
+    return this.service.import(file.buffer.toString('utf-8'))
+  }
+
+  // Custom multer options (disk storage, size limit, ...)
+  @Post('/large')
+  uploadLarge(
+    @UploadedFile('file', { options: { limits: { fileSize: 16 * 1024 * 1024 } } })
+    file: UploadedFileInfo,
+  ) { ... }
+}
+```
+
+`UploadedFileInfo` is a self-contained type (mirrors `Express.Multer.File`) re-exported from `exjs-controllers/decorators/Params` — no need to install `@types/multer` in the consumer.
 
 ---
 

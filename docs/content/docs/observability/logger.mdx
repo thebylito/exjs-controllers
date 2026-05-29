@@ -29,10 +29,30 @@ interface HttpLoggerOptions {
   genCorrelationId?: () => string       // default: randomUUID
   correlationIdHeaderName?: string      // default: 'x-correlation-id'
   logFormat?: 'json' | 'pretty'         // default: 'json'
+  levelFormat?: 'label' | 'number'      // default: 'number'
   stream?: LogStream                    // custom destination
   filePath?: string                     // also append every line to a file
 }
 ```
+
+### Level format
+
+By default Pino serializes the level as its numeric code (`"level":30` for
+`info`). Some log aggregators (e.g. Dokploy) detect severity from the text and
+fall back to a default badge when they see a bare number, so every line shows up
+as "debug". Set `levelFormat: 'label'` to emit the string label instead:
+
+```ts
+logger: { levelFormat: 'label' } // → "level":"info"
+```
+
+| `levelFormat` | Output | When to use |
+| --- | --- | --- |
+| `'number'` (default) | `"level":30` | Native Pino behavior; consumers that map numeric levels |
+| `'label'` | `"level":"info"` | Aggregators that classify by the level string |
+
+This only changes JSON output; the `pretty` formatter always prints the
+uppercased label regardless.
 
 ### Pretty output (development)
 

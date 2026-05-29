@@ -11,6 +11,8 @@ import {
   type HttpResponse,
 } from '#exjs-controllers/http/httpTypes'
 import {
+  buildPinoOptions,
+  type LogLevelFormat,
   runWithRequestLoggerContext,
   setBaseLogger,
 } from '#exjs-controllers/logging/logger'
@@ -46,6 +48,12 @@ export interface HttpLoggerOptions {
   genCorrelationId?: () => string
   correlationIdHeaderName?: string
   logFormat?: HttpLogFormat
+  /**
+   * Como serializar o nível do log. `number` (padrão) mantém o código numérico
+   * do Pino (`"level":30`); `label` emite a string (`"level":"info"`).
+   * Veja {@link LogLevelFormat}.
+   */
+  levelFormat?: LogLevelFormat
   stream?: LogStream
   filePath?: string
 }
@@ -90,13 +98,14 @@ export function createHttpLoggerMiddleware(
 
 function createDefaultLogger(options: HttpLoggerOptions): Logger {
   const logFormat = options.logFormat ?? DEFAULT_LOG_FORMAT
+  const pinoOptions = buildPinoOptions(options.levelFormat)
   const fileStream = options.filePath
     ? createFileStream(options.filePath)
     : undefined
 
   if (logFormat === 'pretty') {
     return pino(
-      {},
+      pinoOptions,
       createCompositeStream(
         createPrettyStream(options.stream ?? process.stdout),
         fileStream,
@@ -105,14 +114,14 @@ function createDefaultLogger(options: HttpLoggerOptions): Logger {
   }
 
   if (options.stream) {
-    return pino({}, createCompositeStream(options.stream, fileStream))
+    return pino(pinoOptions, createCompositeStream(options.stream, fileStream))
   }
 
   if (fileStream) {
-    return pino({}, createCompositeStream(process.stdout, fileStream))
+    return pino(pinoOptions, createCompositeStream(process.stdout, fileStream))
   }
 
-  return pino()
+  return pino(pinoOptions)
 }
 
 function createFileStream(filePath: string): LogStream {
@@ -310,6 +319,10 @@ function formatPrettySize(size: string): string {
 }
 
 function getLevelLabel(level: unknown): string {
+  if (typeof level === 'string') {
+    return level.toUpperCase()
+  }
+
   switch (level) {
     case 10:
       return 'TRACE'

@@ -1,9 +1,21 @@
-import { legacyParamMap, type ParamType, type ParamMetadata } from '#exjs-controllers/metadata/legacyStorage'
+import {
+  legacyParamMap,
+  type ParamType,
+  type ParamMetadata,
+  type UploadOptions,
+} from '#exjs-controllers/metadata/legacyStorage'
+
+export type {
+  UploadOptions,
+  MulterUploadOptions,
+  UploadedFileInfo,
+} from '#exjs-controllers/metadata/legacyStorage'
 
 function createParamDecorator(
   type: ParamType,
   name?: string,
   schemaClass?: new (...args: any[]) => object,
+  uploadOptions?: UploadOptions,
 ) {
   return function (target: object, propertyKey: string, parameterIndex: number): void {
     if (!legacyParamMap.has(target)) {
@@ -15,7 +27,13 @@ function createParamDecorator(
       methodMap.set(propertyKey, [])
     }
 
-    const entry: ParamMetadata = { index: parameterIndex, type, name, schemaClass }
+    const entry: ParamMetadata = {
+      index: parameterIndex,
+      type,
+      name,
+      schemaClass,
+      uploadOptions,
+    }
     methodMap.get(propertyKey)!.push(entry)
   }
 }
@@ -46,4 +64,17 @@ export function Req() {
 
 export function Res() {
   return createParamDecorator('res')
+}
+
+// Injeta um único arquivo enviado em multipart/form-data no campo `name`
+// (via multer). Em `options` dá para passar opções do multer (storage,
+// limits, fileFilter). Sem options, usa memoryStorage (arquivo em `buffer`).
+export function UploadedFile(name: string, options?: UploadOptions) {
+  return createParamDecorator('uploaded-file', name, undefined, options)
+}
+
+// Injeta todos os arquivos enviados no campo `name` (array). Mesmas opções
+// do @UploadedFile.
+export function UploadedFiles(name: string, options?: UploadOptions) {
+  return createParamDecorator('uploaded-files', name, undefined, options)
 }

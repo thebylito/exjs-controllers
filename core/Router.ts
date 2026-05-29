@@ -1,3 +1,5 @@
+import multer, { type Options as MulterOptions } from 'multer'
+
 import {
   createAuthenticationMiddleware,
   RESOLVED_PRINCIPAL_KEY,
@@ -129,6 +131,13 @@ function registerRoute(
     routeHandlers.push(authenticationHandler)
   }
 
+  // Upload (multer) roda DEPOIS do auth — não parseia o multipart de quem
+  // nem está autorizado — e ANTES do handler, populando req.file/req.files.
+  const uploadHandler = resolveUploadMiddleware(handlerParams)
+  if (uploadHandler) {
+    routeHandlers.push(uploadHandler)
+  }
+
   const routeHandler: Handler = async (request, response, next) => {
     const ctx = ensureHttpContext(request, response)
 
@@ -205,6 +214,27 @@ function normalizeJsonControllerResult(result: unknown): unknown {
   }
 }
 
+// Constrói o middleware do multer para a rota quando há um param de upload.
+// Suporta um param de upload por rota (single ou array). Sem opções, o
+// multer usa memoryStorage (arquivo disponível em `buffer`).
+function resolveUploadMiddleware(params: ParamMetadata[]): Handler | undefined {
+  const uploadParam = params.find(
+    (p) => p.type === 'uploaded-file' || p.type === 'uploaded-files',
+  )
+  if (!uploadParam?.name) {
+    return undefined
+  }
+
+  const rawOptions = uploadParam.uploadOptions?.options
+  const resolvedOptions =
+    typeof rawOptions === 'function' ? rawOptions() : rawOptions
+  const instance = multer((resolvedOptions ?? {}) as MulterOptions)
+
+  return uploadParam.type === 'uploaded-files'
+    ? instance.array(uploadParam.name)
+    : instance.single(uploadParam.name)
+}
+
 function resolveArgs(
   request: {
     body: unknown
@@ -212,6 +242,8 @@ function resolveArgs(
     params: Record<string, string | string[]>
     query: Record<string, unknown>
     headers: Record<string, string | string[] | undefined>
+    file?: unknown
+    files?: unknown
   },
   response: unknown,
   params: ParamMetadata[],
@@ -242,6 +274,12 @@ function resolveArgs(
         break
       case 'res':
         args[p.index] = response
+        break
+      case 'uploaded-file':
+        args[p.index] = request.file
+        break
+      case 'uploaded-files':
+        args[p.index] = request.files
         break
       case 'current-user':
       case 'current-api-key': {
