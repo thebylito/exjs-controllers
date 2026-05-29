@@ -1,9 +1,12 @@
 import {
+  isSpanContextValid,
   SpanStatusCode,
   trace,
   type Attributes,
   type Span,
 } from '@opentelemetry/api'
+
+import { captureRequestTraceContext } from '#exjs-controllers/logging/logger'
 
 const DEFAULT_TRACER_NAME = 'exjs-controllers'
 
@@ -28,7 +31,14 @@ export function runWithSpan<T>(
   return tracer.startActiveSpan(
     options.name,
     { attributes: options.attributes },
-    (span) => runSpanCallback(span, callback),
+    (span) => {
+      const spanContext = span.spanContext()
+      if (isSpanContextValid(spanContext)) {
+        captureRequestTraceContext(spanContext.traceId, spanContext.spanId)
+      }
+
+      return runSpanCallback(span, callback)
+    },
   )
 }
 

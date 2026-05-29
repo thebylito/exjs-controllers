@@ -85,4 +85,9 @@ app.listen(3000)
 
 ## Tying logs and traces together
 
-The HTTP logger emits `correlationId` per request, and any active span carries its own `traceId` / `spanId` (read via `@opentelemetry/api`'s `trace.getActiveSpan()`). The pretty log formatter already surfaces `traceId` and `spanId` when present, so you can pivot from a log line straight to your tracing UI.
+The HTTP logger emits `correlationId` per request, and the logger automatically stamps `traceId` / `spanId` onto every log line whenever an OpenTelemetry span is active:
+
+- **Logs emitted inside a handler** get the *current* span's context via a Pino `mixin` that reads `trace.getActiveSpan()` at log time (so nested spans surface their own `spanId`).
+- **The HTTP access log** is emitted on the response `close` event — after the span has ended and outside the async context — so the framework captures the request's outermost span context (the controller span) into the request log context and reuses it for that final line.
+
+This requires a registered OpenTelemetry SDK/provider (see above). With only `@opentelemetry/api` and no provider, spans are no-ops with an invalid context, so `traceId` / `spanId` are omitted (they show as `-` in the pretty formatter). The pretty log formatter surfaces both when present, so you can pivot from a log line straight to your tracing UI.

@@ -136,6 +136,7 @@ const cid = getCorrelationId()
     "requestSize": "0",
     "status": "200",
     "userAgent": "curl/8.6.0",
+    "remoteIp": "203.0.113.10",
     "serverIp": "10.0.0.4",
     "referrer": "-"
   }
@@ -143,5 +144,7 @@ const cid = getCorrelationId()
 ```
 
 `requestSize` falls back to `content-length`, then `Buffer.byteLength(body)` for string/object bodies, then `0`.
+
+`remoteIp` is the client IP, resolved in order: `CF-Connecting-IP` / `True-Client-IP` (set by edge proxies like Cloudflare, authoritative and not spoofable through the edge), then `request.ip` (which resolves `X-Forwarded-For` when `trust proxy` is enabled), then the first `X-Forwarded-For` hop, then `request.socket.remoteAddress`, then `-`. Behind a reverse proxy (Dokploy/Traefik, Nginx, etc.) without an edge header, enable `trust proxy` with the correct hop count so `request.ip` reflects the real client instead of the proxy.
 
 `serverIp` comes from `response.socket.localAddress` (or `request.ip` as a fallback) — i.e. the local interface that handled the request.

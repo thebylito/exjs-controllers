@@ -1,11 +1,14 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
+import { isSpanContextValid, trace } from '@opentelemetry/api'
 import type { Bindings, LoggerOptions } from 'pino'
 import pino, { type Logger } from 'pino'
 
-interface RequestLogContext {
+export interface RequestLogContext {
   correlationId: string
   logger: Logger
+  traceId?: string
+  spanId?: string
 }
 
 /**
@@ -28,16 +31,39 @@ export const DEFAULT_LOG_LEVEL_FORMAT: LogLevelFormat = 'number'
 export function buildPinoOptions(
   levelFormat: LogLevelFormat = DEFAULT_LOG_LEVEL_FORMAT,
 ): LoggerOptions {
-  if (levelFormat === 'number') {
+  const options: LoggerOptions = { mixin: traceContextMixin }
+
+  if (levelFormat === 'label') {
+    options.formatters = {
+      level(label: string) {
+        return { level: label }
+      },
+    }
+  }
+
+  return options
+}
+
+/**
+ * Mixin do Pino que carimba `traceId`/`spanId` do span OpenTelemetry ativo em
+ * cada log emitido enquanto há um span corrente (ex.: dentro de um handler de
+ * controller). Sem provider OTel registrado os spans são no-op (contexto
+ * inválido) e nada é adicionado.
+ */
+function traceContextMixin(): Bindings {
+  const span = trace.getActiveSpan()
+  if (!span) {
+    return {}
+  }
+
+  const spanContext = span.spanContext()
+  if (!isSpanContextValid(spanContext)) {
     return {}
   }
 
   return {
-    formatters: {
-      level(label: string) {
-        return { level: label }
-      },
-    },
+    traceId: spanContext.traceId,
+    spanId: spanContext.spanId,
   }
 }
 
@@ -75,4 +101,25 @@ export function appendRequestLoggerBindings(bindings: Bindings): void {
 
 export function getCorrelationId(): string | undefined {
   return requestLogContext.getStore()?.correlationId
+}
+
+/**
+ * Fixa o contexto de trace na request de log para que o log de acesso HTTP —
+ * emitido no evento `close`, já fora do span ativo e do AsyncLocalStorage —
+ * também carregue traceId/spanId. Vence o primeiro span (o mais externo,
+ * normalmente o do controller): o spanId fica estável para o log de acesso,
+ * enquanto logs intermediários recebem o span corrente via {@link buildPinoOptions} mixin.
+ */
+export function captureRequestTraceContext(
+  traceId: string,
+  spanId: string,
+): void {
+  const activeContext = requestLogContext.getStore()
+
+  if (!activeContext || activeContext.traceId) {
+    return
+  }
+
+  activeContext.traceId = traceId
+  activeContext.spanId = spanId
 }

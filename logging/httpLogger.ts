@@ -13,6 +13,7 @@ import {
 import {
   buildPinoOptions,
   type LogLevelFormat,
+  type RequestLogContext,
   runWithRequestLoggerContext,
   setBaseLogger,
 } from '#exjs-controllers/logging/logger'
@@ -32,12 +33,18 @@ export interface HttpRequestLogPayload {
   requestSize: string
   status: string
   userAgent: string
+  remoteIp: string
   serverIp: string
   referrer: string
 }
 
 export interface HttpLogPayload {
-  correlationId: string
+  /**
+   * Injetado pelos bindings do child logger por request (ver
+   * {@link createHttpLoggerMiddleware}); não deve ser repetido no payload para
+   * evitar a chave `correlationId` duplicada no JSON emitido.
+   */
+  correlationId?: string
   traceId?: string
   spanId?: string
   httpRequest: HttpRequestLogPayload
@@ -75,7 +82,7 @@ export function createHttpLoggerMiddleware(
       correlationIdHeaderName,
       genCorrelationId,
     )
-    const requestContext = {
+    const requestContext: RequestLogContext = {
       correlationId,
       logger: logger.child({ correlationId }),
     }
@@ -84,7 +91,7 @@ export function createHttpLoggerMiddleware(
 
     const writeLog = () => {
       requestContext.logger.info(
-        buildHttpLogPayload(ctx.request, ctx.response, correlationId),
+        buildHttpLogPayload(ctx.request, ctx.response, requestContext),
       )
     }
 
@@ -248,6 +255,7 @@ function buildPrettyHttpRequestBlock(input: {
     `  status: ${input.httpRequest.status}`,
     `  size: ${formatPrettySize(input.httpRequest.requestSize)}`,
     `  userAgent: ${input.httpRequest.userAgent}`,
+    `  remoteIp: ${input.httpRequest.remoteIp}`,
     `  serverIp: ${input.httpRequest.serverIp}`,
     `  referrer: ${input.httpRequest.referrer}`,
   ]
@@ -348,16 +356,18 @@ function isHttpRequestPayload(value: unknown): value is HttpRequestLogPayload {
 function buildHttpLogPayload(
   request: HttpRequest,
   response: HttpResponse,
-  correlationId: string,
+  context: Pick<RequestLogContext, 'traceId' | 'spanId'>,
 ): HttpLogPayload {
   return {
-    correlationId,
+    ...(context.traceId ? { traceId: context.traceId } : {}),
+    ...(context.spanId ? { spanId: context.spanId } : {}),
     httpRequest: {
       requestMethod: request.method || 'GET',
       requestUrl: request.url || request.path,
       requestSize: resolveRequestSize(request),
       status: String(response.statusCode),
       userAgent: getRequestHeader(request, 'user-agent'),
+      remoteIp: resolveRemoteIp(request),
       serverIp: response.socket?.localAddress ?? request.ip ?? '-',
       referrer: getRequestHeader(request, 'referer', 'referrer'),
     },
@@ -374,6 +384,30 @@ function resolveCorrelationId(
     getHeaderValue(request.get('x-request-id')) ??
     getHeaderValue(request.get('x-transaction-id')) ??
     genCorrelationId()
+  )
+}
+
+function resolveRemoteIp(request: HttpRequest): string {
+  // Headers que proxies de borda setam com o IP real do cliente. O Cloudflare
+  // sempre sobrescreve `cf-connecting-ip`, então ele é confiável mesmo sem
+  // `trust proxy` configurado e independe de acertar a contagem de hops.
+  const edgeClientIp = getRequestHeader(
+    request,
+    'cf-connecting-ip',
+    'true-client-ip',
+  )
+  if (edgeClientIp !== '-') {
+    return edgeClientIp
+  }
+
+  const forwardedFor = getHeaderValue(request.get('x-forwarded-for'))
+  const firstForwardedHop = forwardedFor?.split(',')[0]?.trim()
+
+  return (
+    request.ip ||
+    (firstForwardedHop ? firstForwardedHop : undefined) ||
+    request.socket?.remoteAddress ||
+    '-'
   )
 }
 

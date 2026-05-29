@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.8.0] — 2026-05-29
+
+### Added
+
+- **`logging/httpLogger` — `httpRequest.remoteIp`** — o log de request agora inclui o IP do cliente, resolvido em cascata: headers de borda `CF-Connecting-IP` / `True-Client-IP` (setados por proxies como o Cloudflare, autoritativos e não spoofáveis através da borda), depois `request.ip` (que resolve `X-Forwarded-For` quando `trust proxy` está habilitado), o primeiro hop do `X-Forwarded-For`, `request.socket.remoteAddress` e por fim `-`. Atrás de um reverse proxy sem header de borda, habilite `trust proxy` com a contagem de hops correta para que `request.ip` reflita o cliente real em vez do proxy.
+- **Correlação automática logs ↔ traces** — `traceId`/`spanId` do OpenTelemetry agora são carimbados automaticamente nos logs quando há um span ativo. Logs emitidos dentro de um handler recebem o span corrente via um `mixin` do Pino (`trace.getActiveSpan()`); o log de acesso HTTP — emitido no evento `close`, já fora do span e do `AsyncLocalStorage` — recebe o contexto do span mais externo (o do controller), capturado em `runWithSpan` via `captureRequestTraceContext`. Requer um SDK/provider OpenTelemetry registrado; sem provider os spans são no-op (contexto inválido) e os campos são omitidos.
+
+### Fixed
+
+- **`logging/httpLogger` — `correlationId` duplicado** — o `correlationId` aparecia duas vezes no JSON do log de request (uma do binding do child logger, outra do payload). O payload deixou de repetir o campo; a fonte única passa a ser o binding do child logger.
+
+[0.8.0]: https://github.com/thebylito/exjs-controllers/compare/v0.7.0...v0.8.0
+
+---
+
 ## [0.7.0] — 2026-05-29
 
 ### Added
