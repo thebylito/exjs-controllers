@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 
-import pino, { type Logger } from 'pino'
+import pino, { type Level, type Logger } from 'pino'
 
 import {
   ensureHttpContext,
@@ -61,6 +61,12 @@ export interface HttpLoggerOptions {
    * Veja {@link LogLevelFormat}.
    */
   levelFormat?: LogLevelFormat
+  /**
+   * Nível mínimo de log do Pino (`trace`/`debug`/`info`/`warn`/`error`/`fatal`).
+   * Omitido, usa o default do Pino (`info`). Ignorado quando `logger` é
+   * fornecido — nesse caso o nível vem do logger já construído pelo caller.
+   */
+  level?: Level
   stream?: LogStream
   filePath?: string
 }
@@ -105,7 +111,7 @@ export function createHttpLoggerMiddleware(
 
 function createDefaultLogger(options: HttpLoggerOptions): Logger {
   const logFormat = options.logFormat ?? DEFAULT_LOG_FORMAT
-  const pinoOptions = buildPinoOptions(options.levelFormat)
+  const pinoOptions = buildPinoOptions(options.levelFormat, options.level)
   const fileStream = options.filePath
     ? createFileStream(options.filePath)
     : undefined

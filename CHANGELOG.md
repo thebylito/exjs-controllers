@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.9.0] — 2026-05-30
+
+### Added
+
+- **`logging/httpLogger` — opção `level`** — nova opção `level` em `HttpLoggerOptions` (`'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'`) define o nível mínimo do logger Pino montado pelo middleware. Omitida, mantém o default do Pino (`info`); até agora não havia como elevar o nível sem construir e injetar um `logger` próprio. O nível é aplicado via `buildPinoOptions(levelFormat, level)` e herdado pelos child loggers por request, então `level: 'debug'` passa a expor os `logger.debug(...)` da aplicação inteira. Ignorada quando um `logger` pronto é fornecido em `options.logger`.
+
+[0.9.0]: https://github.com/thebylito/exjs-controllers/compare/v0.8.0...v0.9.0
+
+---
+
 ## [0.8.0] — 2026-05-29
 
 ### Added

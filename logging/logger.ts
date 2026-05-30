@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 import { isSpanContextValid, trace } from '@opentelemetry/api'
-import type { Bindings, LoggerOptions } from 'pino'
+import type { Bindings, Level, LoggerOptions } from 'pino'
 import pino, { type Logger } from 'pino'
 
 export interface RequestLogContext {
@@ -26,12 +26,21 @@ export const DEFAULT_LOG_LEVEL_FORMAT: LogLevelFormat = 'number'
 
 /**
  * Monta as opções do Pino compartilhadas pela lib, aplicando o formato de
- * nível desejado.
+ * nível desejado e, opcionalmente, o nível mínimo de log.
+ *
+ * Sem `level` o Pino usa seu default (`info`); passe `debug`/`trace` para
+ * expor logs mais verbosos. O nível é herdado pelos child loggers criados
+ * por request, então setá-lo aqui afeta todo o pipeline de logging.
  */
 export function buildPinoOptions(
   levelFormat: LogLevelFormat = DEFAULT_LOG_LEVEL_FORMAT,
+  level?: Level,
 ): LoggerOptions {
   const options: LoggerOptions = { mixin: traceContextMixin }
+
+  if (level) {
+    options.level = level
+  }
 
   if (levelFormat === 'label') {
     options.formatters = {

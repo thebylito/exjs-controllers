@@ -4,7 +4,10 @@ import pino from 'pino'
 import { describe, expect, it } from 'vitest'
 
 import { createHttpLoggerMiddleware } from '#exjs-controllers/logging/httpLogger'
-import { captureRequestTraceContext } from '#exjs-controllers/logging/logger'
+import {
+  captureRequestTraceContext,
+  logger,
+} from '#exjs-controllers/logging/logger'
 
 class FakeResponse extends EventEmitter {
   statusCode = 200
@@ -160,5 +163,48 @@ describe('createHttpLoggerMiddleware', () => {
       httpRequest: { remoteIp: string }
     }
     expect(payload.httpRequest.remoteIp).toBe('172.16.0.9')
+  })
+
+  // Roda o handler do request com um stream próprio, emitindo um log via o
+  // `logger` (proxy) de dentro do contexto de request — i.e. o child logger
+  // criado pelo middleware, que herda o nível do logger base montado por
+  // createDefaultLogger.
+  async function runWithLevel(level?: 'debug' | 'info'): Promise<string[]> {
+    const chunks: string[] = []
+    const middleware = createHttpLoggerMiddleware({
+      logFormat: 'json',
+      level,
+      genCorrelationId: () => 'some_uuid',
+      stream: {
+        write(chunk: string) {
+          chunks.push(chunk)
+          return true
+        },
+      },
+    })
+
+    const response = new FakeResponse()
+    await middleware(buildRequest() as never, response as never, () => {
+      logger.debug({ marker: 'dbg' }, 'mensagem debug')
+      response.statusCode = 200
+      response.writableFinished = true
+      response.emit('close')
+    })
+
+    return chunks
+  }
+
+  it('emite logs debug quando level: "debug" é configurado', async () => {
+    const chunks = await runWithLevel('debug')
+    const debugLine = chunks.find((c) => c.includes('mensagem debug'))
+    expect(debugLine).toBeDefined()
+    expect((JSON.parse(debugLine!) as { marker: string }).marker).toBe('dbg')
+  })
+
+  it('descarta logs debug no nível padrão (info)', async () => {
+    const chunks = await runWithLevel()
+    expect(chunks.some((c) => c.includes('mensagem debug'))).toBe(false)
+    // o log de acesso (info, emitido no close) ainda sai.
+    expect(chunks.some((c) => c.includes('httpRequest'))).toBe(true)
   })
 })
