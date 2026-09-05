@@ -1,0 +1,7 @@
+{
+  // Build config for the published package: same options as tsconfig.json,
+  // but without test/ so dist/ (and the npm tarball) only contain the library.
+  // tsconfig.json keeps test/ for the editor and for `yarn typecheck`.
+  "extends": "./tsconfig.json",
+  "exclude": ["dist", "docs", "node_modules", "vitest.config.ts", "test"]
+}

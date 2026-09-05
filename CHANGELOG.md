@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.10.1] — 2026-09-05
+
+### Fixed
+
+- **Pacote npm sem arquivos de teste** — o build compilava `test/` junto e o tarball levava `dist/test/unit/*.test.js` (16 arquivos, cerca de 35 kB descompactados). O script `build` agora usa `tsconfig.build.json`, que exclui `test`; o `tsconfig.json` continua cobrindo os testes para o editor e para o novo script `typecheck` (`tsc --noEmit`), que roda no CI.
+
+### Changed
+
+- **`emitDecoratorMetadata` removido do build da lib.** Nada na lib lê metadata `design:*` nem depende de `reflect-metadata`, como a documentação já dizia; o único efeito da opção era emitir chamadas `__metadata` em `schemas/BaseSchema.js`. Consumidores não precisam mudar nada.
+- **Dependabot para `docs/`** — entrada mensal e agrupada para o site de documentação. Como `docs/` não versiona lockfile, as atualizações são só nas faixas do `package.json`.
+
+[0.10.1]: https://github.com/thebylito/exjs-controllers/compare/v0.10.0...v0.10.1
+
+---
+
 ## [0.10.0] — 2026-09-05
 
 ### Breaking
