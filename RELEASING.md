@@ -6,7 +6,8 @@ Step-by-step guide to publish a new version of `exjs-controllers` to npm.
 
 ## Prerequisites
 
-- Node.js ≥ 20 and Yarn Berry installed.
+- Node.js ≥ 22.
+- Yarn 4.18 via Corepack (`corepack enable`; the version is pinned in `package.json` → `packageManager`).
 - npm account with publish access to the `exjs-controllers` package.
 - Authenticated on npm (see step 1).
 
@@ -75,7 +76,7 @@ Add a new section at the top (after the `---` divider) following the existing fo
 - …
 ```
 
-Add the comparison link at the bottom of the file:
+Add the comparison link right after the section:
 
 ```md
 [0.X.Y]: https://github.com/thebylito/exjs-controllers/compare/v0.PREV...v0.X.Y
@@ -83,16 +84,17 @@ Add the comparison link at the bottom of the file:
 
 ---
 
-## 6. Build
-
-The `prepack` script calls `tsc` without `yarn`, which fails in the Yarn Berry environment. Build manually:
+## 6. Build and test
 
 ```bash
-rm -rf dist
-yarn tsc -p tsconfig.json
+yarn install
+yarn clean && yarn build
+yarn test
 ```
 
-No output means success. If there are TypeScript errors, fix them before continuing.
+No output from `yarn build` means success. If there are TypeScript errors, fix them before continuing.
+
+> `npm publish` also runs `prepack` (`clean` + `build`), so `dist/` is always rebuilt from the current source at publish time.
 
 ---
 
@@ -106,7 +108,7 @@ git status --short   # confirm everything is staged
 ```
 
 ```bash
-git commit -m "feat: release 0.X.Y
+git commit -m "chore(release): 0.X.Y
 
 - <brief bullet for each change>"
 ```
@@ -124,10 +126,8 @@ git log --oneline -3   # confirm the tag appears
 
 ## 9. Publish to npm
 
-> `--ignore-scripts` skips `prepack` (which would try to rebuild via `npm run build` → `tsc`, failing in Yarn Berry). The `dist/` was already built in step 6.
-
 ```bash
-npm publish --ignore-scripts
+npm publish
 ```
 
 Expected output ends with:
@@ -162,19 +162,9 @@ git push origin main --tags
 [ ] version bumped in package.json
 [ ] CHANGELOG.md updated (new section + comparison link)
 [ ] README.md updated if public API changed
-[ ] dist/ rebuilt with: rm -rf dist && yarn tsc -p tsconfig.json
+[ ] yarn clean && yarn build && yarn test pass
 [ ] git commit with descriptive message
 [ ] git tag v0.X.Y created
-[ ] npm publish --ignore-scripts succeeded (+ exjs-controllers@0.X.Y)
+[ ] npm publish succeeded (+ exjs-controllers@0.X.Y)
 [ ] git push origin main --tags
 ```
-
----
-
-## Known issues
-
-### `tsc: command not found` during `npm publish`
-
-The `prepack` script runs `npm run build` which calls `tsc` directly. In this repo, TypeScript is managed by Yarn Berry and is not on `$PATH` for `npm` scripts. Always use `--ignore-scripts` and build manually first (step 6).
-
-**Future fix:** change the `build` script to `yarn tsc -p tsconfig.json` — this makes `npm run build` work regardless of whether `npm` or `yarn` runs it.
