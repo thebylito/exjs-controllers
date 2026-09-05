@@ -1,0 +1,68 @@
+name: Docs
+
+# Builds the documentation site (docs/, Next.js static export) and deploys it
+# to GitHub Pages at https://thebylito.github.io/exjs-controllers/.
+# Pull requests that touch docs/ only run the build job.
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', '.github/workflows/docs.yml']
+  pull_request:
+    paths: ['docs/**', '.github/workflows/docs.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Enable Corepack
+        run: npm install -g corepack@latest && corepack enable
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: docs/yarn.lock
+
+      - run: yarn install --immutable
+      - run: yarn typecheck
+
+      # DOCS_BASE_PATH becomes Next's basePath (see docs/next.config.js).
+      - run: yarn build
+        env:
+          DOCS_BASE_PATH: /exjs-controllers
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/out
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

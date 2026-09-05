@@ -25,15 +25,13 @@ updates:
     commit-message:
       prefix: ci
 
-  # Documentation site (Next.js + Fumadocs). docs/ has no committed lockfile
-  # (root .gitignore ignores package-lock.json), so Dependabot can only bump
-  # the ranges in docs/package.json. CI does not build the site: check manually.
+  # Documentation site (Next.js + Fumadocs), an independent Yarn project with
+  # its own docs/yarn.lock. PRs are validated by the build job in docs.yml.
   - package-ecosystem: npm
     directory: /docs
     schedule:
       interval: monthly
     open-pull-requests-limit: 1
-    versioning-strategy: increase
     groups:
       docs-dependencies:
         patterns: ['*']

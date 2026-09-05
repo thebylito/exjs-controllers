@@ -93,7 +93,7 @@
   "bugs": {
     "url": "https://github.com/thebylito/exjs-controllers/issues"
   },
-  "homepage": "https://github.com/thebylito/exjs-controllers#readme",
+  "homepage": "https://thebylito.github.io/exjs-controllers/",
   "files": [
     "dist",
     "README.md",
