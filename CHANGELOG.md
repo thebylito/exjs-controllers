@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.9.1] — 2026-09-05
+
+### Security
+
+- **`multer` 2.1.1 → 2.3.0** — corrige seis advisories de DoS no parsing de `multipart/form-data` (GHSA-72gw-mp4g-v24j, GHSA-3p4h-7m6x-2hcm, GHSA-wc9g-mqfw-jrwm, GHSA-qfvm-cv95-jqjf, GHSA-qvfw-j98x-7q72, GHSA-535w-7cp7-47q4). Sem mudanças na API de `Options`; `@UploadedFile` / `@UploadedFiles` seguem iguais.
+
+### Changed
+
+- **Dependências** — `@scalar/express-api-reference` 0.9.13 → 0.10.17 (adiciona a opção `nonce` para CSP; sem breaking changes) e `zod` 4.4.2 → 4.5.4. Dev: `@types/node` 25 → 26, `@types/multer` 2.1 → 2.2.
+
+[0.9.1]: https://github.com/thebylito/exjs-controllers/compare/v0.9.0...v0.9.1
+
+---
+
 ## [0.9.0] — 2026-05-30
 
 ### Added

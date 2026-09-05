@@ -2,7 +2,7 @@
 # Manual changes might be lost - proceed with caution!
 
 __metadata:
-  version: 8
+  version: 10
   cacheKey: 10c0
 
 "@emnapi/core@npm:1.10.0":
@@ -198,40 +198,59 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@scalar/client-side-rendering@npm:0.1.6":
-  version: 0.1.6
-  resolution: "@scalar/client-side-rendering@npm:0.1.6"
+"@scalar/client-side-rendering@npm:0.3.10":
+  version: 0.3.10
+  resolution: "@scalar/client-side-rendering@npm:0.3.10"
   dependencies:
-    "@scalar/types": "npm:0.9.5"
-  checksum: 10c0/2efde7402b91b66b43c047fed46b2d7696713aac0fdbc3dfd43e1abd6ba2ad917925c793927e0c55e40029af786250de653399ff12a800440df864527b3f8fb3
+    "@scalar/schemas": "npm:0.8.4"
+    "@scalar/types": "npm:0.18.3"
+    "@scalar/validation": "npm:0.6.3"
+  checksum: 10c0/7936b87a2bc768e298ddd839775ed94247756318d7a8c8c2568245bb1331c320af1dd6cbfdbe6fad3cf5158856dfe21ad1d20365dd609b67b66c9a8024638aae
   languageName: node
   linkType: hard
 
-"@scalar/express-api-reference@npm:^0.9.10":
-  version: 0.9.13
-  resolution: "@scalar/express-api-reference@npm:0.9.13"
+"@scalar/express-api-reference@npm:^0.10.17":
+  version: 0.10.17
+  resolution: "@scalar/express-api-reference@npm:0.10.17"
   dependencies:
-    "@scalar/client-side-rendering": "npm:0.1.6"
-  checksum: 10c0/4a5654235f9147d45362935ca13f0500e77568a52e4d7516461d15d9b790f4aed3a01b6d4127cf765ef53ab581d323879da16996865eff68f1aa939e87518486
+    "@scalar/client-side-rendering": "npm:0.3.10"
+  checksum: 10c0/fd5b4c0ffcd198b021a6e8feb3d3d8267c6298fdc98e3c7d4cb57ec5cf7727fcbf6a619e57ef1010f76380c494699c75a2178d52aa9f7ac310360eafc956ee85
   languageName: node
   linkType: hard
 
-"@scalar/helpers@npm:0.5.5":
-  version: 0.5.5
-  resolution: "@scalar/helpers@npm:0.5.5"
-  checksum: 10c0/f8757dc1bca281f02348769fced8df2325943d454d50e1160cf8d0659d35272ea6463dd24b05f5b8dc15b01b9e561605722b4a3a751903c8dda5384be3e29a20
+"@scalar/helpers@npm:0.11.2":
+  version: 0.11.2
+  resolution: "@scalar/helpers@npm:0.11.2"
+  checksum: 10c0/5c52e4f400111b74ec531edf69ffb846a58e7c4fb95fbb38295a9568f54b48470bc28aecca1439d1296b634334d5947a80aa96c248453e3e7941b00c3d86bf0a
   languageName: node
   linkType: hard
 
-"@scalar/types@npm:0.9.5":
-  version: 0.9.5
-  resolution: "@scalar/types@npm:0.9.5"
+"@scalar/schemas@npm:0.8.4":
+  version: 0.8.4
+  resolution: "@scalar/schemas@npm:0.8.4"
   dependencies:
-    "@scalar/helpers": "npm:0.5.5"
+    "@scalar/helpers": "npm:0.11.2"
+    "@scalar/validation": "npm:0.6.3"
+  checksum: 10c0/4548726d238c09b6a2c55972673b1d3671e054fc6b57e378efb04b3ef86ed05ce1eb4dd8520072e976b6d79d3fb00f9006a809f0123efe33cc1b9d975c2c83ac
+  languageName: node
+  linkType: hard
+
+"@scalar/types@npm:0.18.3":
+  version: 0.18.3
+  resolution: "@scalar/types@npm:0.18.3"
+  dependencies:
+    "@scalar/helpers": "npm:0.11.2"
     nanoid: "npm:^5.1.6"
-    type-fest: "npm:^5.3.1"
-    zod: "npm:^4.3.5"
-  checksum: 10c0/cc000bdd332ceb856503c0244e36888a3625e9414547e6952e7bde45d078b30668b58235640b609d6642b78cea05b0cd5506435fe47775996d6046230de34380
+    type-fest: "npm:^5.8.0"
+    zod: "npm:^4.4.3"
+  checksum: 10c0/6c7d1e714acf63645367a9fee159166c76f15354b379e4f05ec89a2155da96e7de0bdf2ea36416ca3638016e4484bb9beb46e0077a449ee82f5b0152bf0f53d7
+  languageName: node
+  linkType: hard
+
+"@scalar/validation@npm:0.6.3":
+  version: 0.6.3
+  resolution: "@scalar/validation@npm:0.6.3"
+  checksum: 10c0/3c510769ff50beeeebc2b4fce1bc9de726dbe89ab5a78525a4eec5209353f534b34a075dee3c86e2238e5068ca5aac8260d110f9496b5b3ad863695ab633855a
   languageName: node
   linkType: hard
 
@@ -306,7 +325,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/express@npm:*, @types/express@npm:^5.0.5":
+"@types/express@npm:*, @types/express@npm:^5.0.6":
   version: 5.0.6
   resolution: "@types/express@npm:5.0.6"
   dependencies:
@@ -324,21 +343,30 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/multer@npm:^2":
-  version: 2.1.0
-  resolution: "@types/multer@npm:2.1.0"
+"@types/multer@npm:^2.2.0":
+  version: 2.2.0
+  resolution: "@types/multer@npm:2.2.0"
   dependencies:
     "@types/express": "npm:*"
-  checksum: 10c0/f1f512918f79c5dac007d8d30de74372ad24932b34b43d09f250178dcce6da426297e0ea9c939322545519f133cd525dca0552781967d05f43d782ff0b169333
+  checksum: 10c0/72472c2da0a9afe86e2d64cfec53f4564727affcb691f78fcbdef495978857903f03326e4ecf58f6d1c3c4c89bb39e5d94fb97d4722a1f448f777c4fa690754b
   languageName: node
   linkType: hard
 
-"@types/node@npm:*, @types/node@npm:^25.6.0":
+"@types/node@npm:*":
   version: 25.6.0
   resolution: "@types/node@npm:25.6.0"
   dependencies:
     undici-types: "npm:~7.19.0"
   checksum: 10c0/d2d2015630ff098a201407f55f5077a20270ae4f465c739b40865cd9933b91b9c5d2b85568eadaf3db0801b91e267333ca7eb39f007428b173d1cdab4b339ac5
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:^26.4.1":
+  version: 26.4.1
+  resolution: "@types/node@npm:26.4.1"
+  dependencies:
+    undici-types: "npm:~8.3.0"
+  checksum: 10c0/29568336db8bc67740744782492af0e81ab1f88d86eaa07e38cf0a4c8bae7250a7b4b85c80ac1014fc98b2bc6d4bcac872b2c494ee0671b3880eada7c1fdbc94
   languageName: node
   linkType: hard
 
@@ -746,16 +774,16 @@ __metadata:
   resolution: "exjs-controllers@workspace:."
   dependencies:
     "@opentelemetry/api": "npm:^1.9.1"
-    "@scalar/express-api-reference": "npm:^0.9.10"
-    "@types/express": "npm:^5.0.5"
-    "@types/multer": "npm:^2"
-    "@types/node": "npm:^25.6.0"
+    "@scalar/express-api-reference": "npm:^0.10.17"
+    "@types/express": "npm:^5.0.6"
+    "@types/multer": "npm:^2.2.0"
+    "@types/node": "npm:^26.4.1"
     express: "npm:^5.2.1"
-    multer: "npm:^2.1.1"
+    multer: "npm:^2.3.0"
     pino: "npm:^10.3.1"
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.0.0"
-    zod: "npm:^4.3.6"
+    zod: "npm:^4.5.4"
   languageName: unknown
   linkType: soft
 
@@ -1205,15 +1233,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"multer@npm:^2.1.1":
-  version: 2.1.1
-  resolution: "multer@npm:2.1.1"
+"multer@npm:^2.3.0":
+  version: 2.3.0
+  resolution: "multer@npm:2.3.0"
   dependencies:
     append-field: "npm:^1.0.0"
     busboy: "npm:^1.6.0"
     concat-stream: "npm:^2.0.0"
     type-is: "npm:^1.6.18"
-  checksum: 10c0/2ec4e02833b20f403cfb879d4b64d2a9070d902b9deae7aef18a6faadb707d7665385456cf540aa8a6dadfe3d4c5fc8e0e7b0675b94e1077048b1125426deee6
+  checksum: 10c0/e78fe6b1fe2132cdd33eeec4146643b906046edc1bbbcc90a43ea3d3aed6a7271272897a6d2e40e711e595a156d99b6761848a76fecca6ae3b9a7ee4892ee30c
   languageName: node
   linkType: hard
 
@@ -1800,12 +1828,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"type-fest@npm:^5.3.1":
-  version: 5.6.0
-  resolution: "type-fest@npm:5.6.0"
+"type-fest@npm:^5.8.0":
+  version: 5.9.0
+  resolution: "type-fest@npm:5.9.0"
   dependencies:
     tagged-tag: "npm:^1.0.0"
-  checksum: 10c0/5468a8ffda7f3904e6f7bbd8069eb8b6dd4bd9156e206df7a01d09a73e28cd1afedf74ead9d0fc12841c8c90074194859feca240511c50800962fde1bd9ddcbc
+  checksum: 10c0/9bf14a49454b9b40d9fe85e563a4cf90990bbe7c75958665b72660b4197a905f247be682a7757cac7c8fa60fc0eae32cc8cf51f80a88e15f0a3d4a8ec07eb5b6
   languageName: node
   linkType: hard
 
@@ -1861,6 +1889,13 @@ __metadata:
   version: 7.19.2
   resolution: "undici-types@npm:7.19.2"
   checksum: 10c0/7159f10546f9f6c47d36776bb1bbf8671e87c1e587a6fee84ae1f111ae8de4f914efa8ca0dfcd224f4f4a9dfc3f6028f627ccb5ddaccf82d7fd54671b89fac3e
+  languageName: node
+  linkType: hard
+
+"undici-types@npm:~8.3.0":
+  version: 8.3.0
+  resolution: "undici-types@npm:8.3.0"
+  checksum: 10c0/c8aa7e2fbebfce519654dafadc0ece59be888d2ccaf180fb4495da875e7b536d2456345c384069c7e6f3e9c9ab7435f074957da306f142343eee86ff8048855a
   languageName: node
   linkType: hard
 
@@ -2054,9 +2089,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"zod@npm:^4.3.5, zod@npm:^4.3.6":
-  version: 4.4.2
-  resolution: "zod@npm:4.4.2"
-  checksum: 10c0/aa5097464c41cf22d715cbc29873ae6feaaf56e687b81d140458d7c01201e7b9de1ee46c8567b5458ee3c0068b8a82b2652535b5d39589fcb5562d861c83ded3
+"zod@npm:^4.4.3, zod@npm:^4.5.4":
+  version: 4.5.4
+  resolution: "zod@npm:4.5.4"
+  checksum: 10c0/511a2a4d1a6f875dfdd70a1586989a8b14ef126776cd6218a2c760b9f65f14ef389ec20d92ee1aa4fcb4566d4ff3fa012956044f9dc503510d82e4c756a8ba92
   languageName: node
   linkType: hard
