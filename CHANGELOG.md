@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.10.0] — 2026-09-05
+
+### Breaking
+
+- **Node.js mínimo passa a ser 22** (`engines.node: ">=22"`). Node 20 chegou ao fim de vida em 2026-04-30 e `@scalar/express-api-reference` já exigia Node ≥ 22 desde a 0.9.0. Consumidores em Node 20 precisam atualizar o runtime; não há mudança de API.
+
+### Added
+
+- **CI/CD com GitHub Actions** — `ci.yml` roda build e testes em Node 22 e 24, mais `yarn npm audit --all`, em push na `main` e em pull requests. `release.yml` dispara em tags `v*`: valida a tag contra o `package.json`, extrai as notas desta seção do CHANGELOG, publica no npm via Trusted Publishing (OIDC, com provenance) e cria a GitHub Release com o tarball anexado. Dependabot abre PRs semanais agrupados para dependências npm e para as actions.
+
+### Changed
+
+- **Toolchain** — TypeScript 6.0.3 → 7.0.2 (compilador nativo). Os `.d.ts` emitidos são equivalentes; as diferenças são apenas cosméticas (aspas e um import simplificado). Vitest 4 → 5, com `vite` 8 como devDependency explícita (agora peer dependency do Vitest).
+- **Yarn 4.12 → 4.18** (campo `packageManager`) e migração de PnP para `nodeLinker: node-modules`. Motivo: o `tsc` nativo do TS 7 não resolve módulos via PnP (falha com TS2688 em `@types/node`) e o Vite 8 declarou PnP como não suportado. Removido `.yarn/sdks`; o VS Code passa a usar `node_modules/typescript/lib`.
+- **RELEASING.md** — reescrito para o fluxo automatizado: localmente só bump de versão, CHANGELOG, commit e `git push --tags`; build, testes, publish e GitHub Release ficam com o CI. O workaround `npm publish --ignore-scripts` deixou de ser necessário.
+
+[0.10.0]: https://github.com/thebylito/exjs-controllers/compare/v0.9.1...v0.10.0
+
+---
+
 ## [0.9.1] — 2026-09-05
 
 ### Security

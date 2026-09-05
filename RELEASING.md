@@ -1,28 +1,22 @@
 # Release process
 
-Step-by-step guide to publish a new version of `exjs-controllers` to npm.
+Releases are built, tested and published by GitHub Actions
+(`.github/workflows/release.yml`). Locally you only bump the version, update the
+changelog, commit and push a tag.
 
 ---
 
 ## Prerequisites
 
-- Node.js ≥ 20 and Yarn Berry installed.
-- npm account with publish access to the `exjs-controllers` package.
-- Authenticated on npm (see step 1).
+- Node.js ≥ 22 and Yarn 4.18 via Corepack (`corepack enable`; the version is
+  pinned in `package.json` → `packageManager`).
+- Push access to `main`.
+- One-time: the npm Trusted Publisher for this repo (see [One-time setup](#one-time-setup-npm-trusted-publisher)).
+  No npm token or `npm login` is needed locally.
 
 ---
 
-## 1. Authenticate on npm (first time or when token expired)
-
-```bash
-npm login
-# Opens a browser tab — approve the login and press ENTER.
-npm whoami   # must print "thebylito"
-```
-
----
-
-## 2. Review what changed
+## 1. Review what changed
 
 ```bash
 git status --short
@@ -33,7 +27,7 @@ Go through each modified file and confirm the changes are intentional and comple
 
 ---
 
-## 3. Decide the version bump
+## 2. Decide the version bump
 
 Follow [Semantic Versioning](https://semver.org):
 
@@ -45,7 +39,7 @@ Follow [Semantic Versioning](https://semver.org):
 
 ---
 
-## 4. Update `package.json`
+## 3. Update `package.json`
 
 Edit the `version` field:
 
@@ -53,9 +47,11 @@ Edit the `version` field:
 "version": "0.X.Y"
 ```
 
+The release workflow fails if the pushed tag does not match this version.
+
 ---
 
-## 5. Update `CHANGELOG.md`
+## 4. Update `CHANGELOG.md`
 
 Add a new section at the top (after the `---` divider) following the existing format:
 
@@ -73,83 +69,115 @@ Add a new section at the top (after the `---` divider) following the existing fo
 
 ### Breaking
 - …
-```
 
-Add the comparison link at the bottom of the file:
-
-```md
 [0.X.Y]: https://github.com/thebylito/exjs-controllers/compare/v0.PREV...v0.X.Y
 ```
 
+The release workflow extracts this section as the GitHub Release notes
+(`.github/scripts/release-notes.sh`) and fails before publishing if it is missing.
+
 ---
 
-## 6. Build
-
-The `prepack` script calls `tsc` without `yarn`, which fails in the Yarn Berry environment. Build manually:
+## 5. Verify locally
 
 ```bash
-rm -rf dist
-yarn tsc -p tsconfig.json
+yarn install
+yarn clean && yarn build
+yarn test
 ```
 
-No output means success. If there are TypeScript errors, fix them before continuing.
+CI runs the same steps on Node 22 and 24 for every push and pull request.
 
 ---
 
-## 7. Commit
+## 6. Commit
 
 Stage every changed file (source + `package.json` + `CHANGELOG.md` + `yarn.lock`):
 
 ```bash
 git add .
 git status --short   # confirm everything is staged
-```
-
-```bash
-git commit -m "feat: release 0.X.Y
+git commit -m "chore(release): 0.X.Y
 
 - <brief bullet for each change>"
 ```
 
 ---
 
-## 8. Tag
+## 7. Tag and push
 
 ```bash
 git tag v0.X.Y
-git log --oneline -3   # confirm the tag appears
-```
-
----
-
-## 9. Publish to npm
-
-> `--ignore-scripts` skips `prepack` (which would try to rebuild via `npm run build` → `tsc`, failing in Yarn Berry). The `dist/` was already built in step 6.
-
-```bash
-npm publish --ignore-scripts
-```
-
-Expected output ends with:
-
-```
-+ exjs-controllers@0.X.Y
-```
-
-To preview the tarball without publishing:
-
-```bash
-npm run pack:dry-run
-# or
-npm run publish:dry-run
-```
-
----
-
-## 10. Push to GitHub
-
-```bash
 git push origin main --tags
+```
+
+Pushing the tag triggers the release workflow.
+
+---
+
+## 8. Watch the release
+
+```bash
+gh run watch
+```
+
+or open the **Actions** tab on GitHub. The workflow:
+
+1. Checks that the tag matches `package.json` `version`.
+2. Extracts the CHANGELOG section for the version (fails if absent).
+3. Runs `yarn install --immutable`, `yarn build`, `yarn test`.
+4. Publishes to npm with provenance via Trusted Publishing (OIDC).
+5. Creates the GitHub Release `v0.X.Y` with the changelog notes and the `.tgz` tarball attached.
+
+Expected result: `npm view exjs-controllers version` prints the new version and
+the release appears under **Releases** on GitHub.
+
+---
+
+## If the release fails
+
+- **Before "Publish to npm"** (tag mismatch, missing changelog, failing tests):
+  nothing was published. Fix the problem, then move the tag:
+
+  ```bash
+  git tag -d v0.X.Y
+  git push origin :refs/tags/v0.X.Y
+  git tag v0.X.Y
+  git push origin main --tags
+  ```
+
+- **After "Publish to npm"** (e.g. the GitHub Release step failed): the npm
+  version is already out and cannot be republished. Create the GitHub Release by
+  hand with `gh release create v0.X.Y --notes-file <(.github/scripts/release-notes.sh 0.X.Y)`,
+  or ship a patch release if the package itself is broken
+  (`npm deprecate exjs-controllers@0.X.Y "<reason>"` for the bad one).
+
+---
+
+## One-time setup: npm Trusted Publisher
+
+Done once per package; lets the workflow publish without any token.
+
+1. On npmjs.com open the `exjs-controllers` package → **Settings** → **Trusted Publisher** → **GitHub Actions**.
+2. Fill in (case-sensitive, exact):
+   - Organization or user: `thebylito`
+   - Repository: `exjs-controllers`
+   - Workflow filename: `release.yml`
+   - Environment name: leave blank
+3. Save. The first tagged release confirms it works.
+4. Optional, after that first release: in the package's publishing access settings
+   choose the option that disallows tokens, so only the workflow can publish.
+
+---
+
+## Manual fallback
+
+If GitHub Actions is unavailable, the old path still works:
+
+```bash
+yarn install && yarn clean && yarn build && yarn test
+npm login
+npm publish
 ```
 
 ---
@@ -157,24 +185,12 @@ git push origin main --tags
 ## Checklist
 
 ```
-[ ] npm whoami returns the correct user
 [ ] All source changes reviewed
 [ ] version bumped in package.json
 [ ] CHANGELOG.md updated (new section + comparison link)
 [ ] README.md updated if public API changed
-[ ] dist/ rebuilt with: rm -rf dist && yarn tsc -p tsconfig.json
+[ ] yarn clean && yarn build && yarn test pass locally
 [ ] git commit with descriptive message
-[ ] git tag v0.X.Y created
-[ ] npm publish --ignore-scripts succeeded (+ exjs-controllers@0.X.Y)
-[ ] git push origin main --tags
+[ ] git tag v0.X.Y created and pushed (git push origin main --tags)
+[ ] Release workflow green; npm version and GitHub Release visible
 ```
-
----
-
-## Known issues
-
-### `tsc: command not found` during `npm publish`
-
-The `prepack` script runs `npm run build` which calls `tsc` directly. In this repo, TypeScript is managed by Yarn Berry and is not on `$PATH` for `npm` scripts. Always use `--ignore-scripts` and build manually first (step 6).
-
-**Future fix:** change the `build` script to `yarn tsc -p tsconfig.json` — this makes `npm run build` work regardless of whether `npm` or `yarn` runs it.

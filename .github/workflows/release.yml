@@ -1,0 +1,66 @@
+name: Release
+
+# Triggered by pushing a tag like v0.10.0 (see RELEASING.md).
+# Publishes to npm via Trusted Publishing (OIDC, no token) and creates the
+# GitHub Release with the matching CHANGELOG.md section as notes.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write # gh release create
+  id-token: write # npm trusted publishing (OIDC)
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
+jobs:
+  release:
+    name: Publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Enable Corepack
+        run: npm install -g corepack@latest && corepack enable
+
+      # Node 24 bundles npm >= 11.5.1, required for OIDC publishing.
+      # No `registry-url` here: it would write an _authToken entry to .npmrc
+      # and OIDC must run without NODE_AUTH_TOKEN.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: yarn
+
+      - name: Check tag matches package.json version
+        run: |
+          pkg="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$pkg" != "$tag" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${pkg}"
+            exit 1
+          fi
+
+      # Fails before publishing if CHANGELOG.md has no section for this version.
+      - name: Extract release notes from CHANGELOG.md
+        run: .github/scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > release-notes.md
+
+      - run: yarn install --immutable
+      - run: yarn build
+      - run: yarn test
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+
+      - name: Pack tarball for the GitHub Release
+        run: npm pack --ignore-scripts
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
+            ./*.tgz
