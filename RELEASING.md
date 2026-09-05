@@ -82,6 +82,7 @@ The release workflow extracts this section as the GitHub Release notes
 
 ```bash
 yarn install
+yarn typecheck
 yarn clean && yarn build
 yarn test
 ```
@@ -189,7 +190,7 @@ npm publish
 [ ] version bumped in package.json
 [ ] CHANGELOG.md updated (new section + comparison link)
 [ ] README.md updated if public API changed
-[ ] yarn clean && yarn build && yarn test pass locally
+[ ] yarn typecheck && yarn clean && yarn build && yarn test pass locally
 [ ] git commit with descriptive message
 [ ] git tag v0.X.Y created and pushed (git push origin main --tags)
 [ ] Release workflow green; npm version and GitHub Release visible
