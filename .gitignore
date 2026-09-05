@@ -11,3 +11,8 @@ npm-debug.log*
 # Docs
 docs/.next
 docs/.source
+
+# Docs build artifacts
+docs/out
+docs/tsconfig.tsbuildinfo
+docs/.yarn/

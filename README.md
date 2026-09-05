@@ -2,6 +2,8 @@
 
 Declarative controllers, DTO validation, dependency injection, OpenAPI generation and Express bootstrap for TypeScript APIs.
 
+📖 **Documentation:** https://thebylito.github.io/exjs-controllers/
+
 ## Install
 
 ```bash
