@@ -318,7 +318,7 @@ function getFirstValue(value: string | string[] | undefined): string | undefined
 }
 
 function hydrateBodyArg(body: unknown, param: ParamMetadata): unknown {
-  if (!param.schemaClass || typeof body !== 'object' || body === null) {
+  if (!param.schemaClass) {
     return body
   }
 
@@ -327,6 +327,14 @@ function hydrateBodyArg(body: unknown, param: ParamMetadata): unknown {
   }
 
   const SchemaClass = param.schemaClass as new () => object
+
+  // Sem body (request sem JSON, ou parser que não populou `req.body`), o
+  // handler recebe uma instância vazia do DTO. Assim a validação do use case
+  // responde 422 listando os campos faltantes, em vez de um 500 por "input
+  // não estende BaseSchema".
+  if (typeof body !== 'object' || body === null) {
+    return new SchemaClass()
+  }
 
   return Object.assign(new SchemaClass(), body)
 }

@@ -37,7 +37,7 @@ When **no** parameter decorator is present, the framework falls back to passing 
 
 ## `@Body(schemaClass?)`
 
-Without `schemaClass`, the raw JSON body is forwarded as-is. When you pass a DTO class, the framework constructs an instance via `Object.assign(new SchemaClass(), body)` so prototype methods (`validate`, `merge`, ...) are available inside the handler.
+Without `schemaClass`, the raw JSON body is forwarded as-is. When you pass a DTO class, the framework constructs an instance via `Object.assign(new SchemaClass(), body)` so prototype methods (`validate`, `merge`, ...) are available inside the handler. If the request has no body — or the body parser left `req.body` undefined — the handler receives an empty instance, so validation reports the missing fields instead of failing on `undefined`.
 
 ```ts
 import { Body } from 'exjs-controllers/decorators/Params'

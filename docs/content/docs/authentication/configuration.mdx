@@ -22,24 +22,26 @@ export type ResolvedPrincipal<TPrincipal = unknown> = {
 }
 
 export type AuthenticationConfig<TPrincipal = unknown> = {
-  currentUserChecker: (
+  currentUserChecker(
     action: Action
-  ) => Promise<ResolvedPrincipal<TPrincipal> | null | undefined>
+  ): Promise<ResolvedPrincipal<TPrincipal> | null | undefined>
     | ResolvedPrincipal<TPrincipal>
     | null
     | undefined
 
-  authorizationChecker: (
+  authorizationChecker(
     action: Action,
     principal: TPrincipal,
     kind: PrincipalKind,
     requiredPermissions: string[]
-  ) => Promise<boolean> | boolean
+  ): Promise<boolean> | boolean
 
   openApiSecuritySchemes: Record<string, OpenApiSecuritySchemeEntry>
   scalarSecurityConfig?: ScalarSecurityConfig
 }
 ```
+
+`TPrincipal` is whatever your `currentUserChecker` returns. A config typed with your own principal — `AuthenticationConfig<User>` — is assignable to the `authentication` option of `configureApplication` without a cast.
 
 - **`currentUserChecker`** — inspects the request and returns the principal (with its kind), `null` if anonymous, or throws to surface an explicit authentication failure.
 - **`authorizationChecker`** — given a principal and the route's `requiredPermissions`, returns `true` to allow or `false` to forbid.
