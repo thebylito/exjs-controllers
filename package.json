@@ -1,6 +1,6 @@
 {
   "name": "exjs-controllers",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Declarative controllers, DTO validation, dependency injection, OpenAPI and Express bootstrap for TypeScript APIs.",
   "license": "MIT",
   "keywords": [

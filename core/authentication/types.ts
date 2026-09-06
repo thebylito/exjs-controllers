@@ -28,21 +28,27 @@ export type OpenApiSecuritySchemeEntry = {
   kinds?: PrincipalKind[]
 }
 
+// Os checkers são declarados com sintaxe de método, e não como propriedades
+// de função, de propósito: parâmetros de método são checados de forma
+// bivariante, então um `AuthenticationConfig<User>` continua atribuível ao
+// `AuthenticationConfig<unknown>` que `ExpressServerOptions.authentication`
+// espera. Como propriedade, `principal: TPrincipal` seria contravariante e o
+// consumidor precisaria de um cast para passar um config tipado.
 export type AuthenticationConfig<TPrincipal = unknown> = {
-  currentUserChecker: (
+  currentUserChecker(
     action: Action,
-  ) =>
+  ):
     | Promise<ResolvedPrincipal<TPrincipal> | null | undefined>
     | ResolvedPrincipal<TPrincipal>
     | null
     | undefined
 
-  authorizationChecker: (
+  authorizationChecker(
     action: Action,
     principal: TPrincipal,
     kind: PrincipalKind,
     requiredPermissions: string[],
-  ) => Promise<boolean> | boolean
+  ): Promise<boolean> | boolean
 
   openApiSecuritySchemes: Record<string, OpenApiSecuritySchemeEntry>
   scalarSecurityConfig?: ScalarSecurityConfig

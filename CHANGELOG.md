@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.11.1] — 2026-09-06
+
+### Fixed
+
+- **`AuthenticationConfig<TPrincipal>` tipado agora é aceito por `configureApplication` sem cast.** `currentUserChecker` e `authorizationChecker` passaram a ser declarados com sintaxe de método; como propriedades de função, o parâmetro `principal: TPrincipal` era contravariante e um `AuthenticationConfig<User>` (o exemplo do README) não era atribuível ao `AuthenticationConfig<unknown>` de `ExpressServerOptions.authentication` em modo strict.
+- **Request sem body em rota com `@Body(Dto)` respondia 500.** O router repassava `undefined` ao handler e, com `@DefineUseCase`, a validação falhava com "First argument ... must extend BaseSchema". Agora o handler recebe uma instância vazia do DTO e a validação responde 422 listando os campos faltantes. `@Body()` sem classe continua entregando o body cru.
+
 ## [0.11.0] — 2026-09-05
 
 ### Breaking
@@ -27,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **`exports` `./authentication/*` e `./entities/*` do `package.json`.** Apontavam para diretórios que não existem desde a 0.5.0; qualquer import por esses caminhos já falhava.
 
+[0.11.1]: https://github.com/thebylito/exjs-controllers/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/thebylito/exjs-controllers/compare/v0.10.1...v0.11.0
 
 ---
