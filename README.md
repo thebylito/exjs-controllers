@@ -144,7 +144,8 @@ Use these decorators on method parameters to bind request data automatically.
 | `@HeaderParam(name)` | `req.headers[name]` |
 | `@Req()` | The raw Express `Request` object |
 | `@Res()` | The raw Express `Response` object |
-| `@SessionContext()` | The authenticated session (`AuthenticationContext`) — throws `401` if no active session |
+| `@CurrentUser(options?)` | The resolved `user` principal — responds `401` when missing unless `{ optional: true }` |
+| `@CurrentApiKey(options?)` | The resolved `api-key` principal — same rules as `@CurrentUser` |
 | `@UploadedFile(field, options?)` | A single uploaded file from a `multipart/form-data` field (via [multer](https://github.com/expressjs/multer)) |
 | `@UploadedFiles(field, options?)` | All uploaded files from a `multipart/form-data` field (array) |
 
@@ -154,9 +155,9 @@ class OrdersController {
   @Post('/')
   create(
     @Body(CreateOrderInput) input: CreateOrderInput,
-    @SessionContext() session: SessionContext,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    console.log('Created by', session.subject)
+    console.log('Created by', user.id)
     return this.orderService.create(input)
   }
 
@@ -167,8 +168,6 @@ class OrdersController {
   ) { ... }
 }
 ```
-
-> `SessionContext` (the type) is re-exported from `exjs-controllers/decorators/Params` for convenience and is identical to `AuthenticationContext`.
 
 ### File uploads
 
@@ -284,69 +283,82 @@ Controllers are resolved automatically via the DI container — no need to mark 
 
 ## Authentication and authorization
 
+`exjs-controllers` does not ship an auth backend. You implement the `AuthenticationConfig` contract — resolve the caller, decide permissions — and pass it to `configureApplication`. The authentication middleware is mounted only on routes that use `@Authorized`, `@CurrentUser` or `@CurrentApiKey`.
+
 ### Configuration
 
-Pass `authentication` to `configureApplication` to enable OAuth2 token introspection:
-
 ```ts
-await configureApplication(app, {
-  controllers: [...],
-  authentication: {
-    provider: {
-      type: 'oauth2',
-      name: 'my-provider',
-      // Option A — direct introspection endpoint
-      introspection: {
-        url: 'https://auth.example.com/introspect',
-        clientId: process.env.CLIENT_ID,
-        clientSecret: process.env.CLIENT_SECRET,
-      },
-      // Option B — discovery document (auto-resolves introspection URL)
-      // discovery: { url: 'https://auth.example.com/.well-known/openid-configuration', ... }
+import type { AuthenticationConfig } from 'exjs-controllers/core/authentication'
+
+const authentication: AuthenticationConfig<AuthenticatedUser> = {
+  // Who is calling? Return { principal, kind } or null for anonymous.
+  currentUserChecker: async ({ request }) => {
+    const header = request.headers.authorization
+    if (!header?.startsWith('Bearer ')) return null
+
+    const session = await sessions.verify(header.slice('Bearer '.length))
+    return session ? { principal: session.user, kind: 'user' } : null
+  },
+
+  // Does the principal satisfy the route's permissions?
+  authorizationChecker: (_action, user, _kind, required) =>
+    required.every((permission) => user.permissions.includes(permission)),
+
+  // Schemes to document in OpenAPI, tagged with the kinds they cover.
+  openApiSecuritySchemes: {
+    bearerAuth: {
+      scheme: { type: 'http', scheme: 'bearer' },
+      kinds: ['user'],
     },
   },
-})
+}
+
+await configureApplication(app, { controllers, authentication })
 ```
 
-### `@Authorized(...scopes)`
+`kind` is `'user'` or `'api-key'`, so human sessions and machine clients can coexist behind a single config.
 
-Protects a route. The request must carry a valid Bearer token with all listed scopes.
+### `@Authorized(...permissions)`
+
+Protects a route. Permissions are passed verbatim to your `authorizationChecker`; their semantics are yours. `@Authorized()` with no arguments only requires an authenticated principal.
 
 ```ts
-@Controller('/admin')
+@JsonController('/admin')
 class AdminController {
   @Authorized('admin:read')
   @Get('/users')
   listUsers() { ... }
 
-  @Authorized('admin:write')
+  // Object form also restricts which principal kinds may call the route
+  @Authorized({ permissions: ['admin:write'], kinds: ['user'] })
   @Delete('/users/:id')
   deleteUser(@Param('id') id: string) { ... }
 }
 ```
 
-### `@SessionContext()`
+### `@CurrentUser()` and `@CurrentApiKey()`
 
-Injects the authenticated session into a parameter. Responds with `401` if there is no active session.
+Inject the resolved principal into a handler argument. Both accept `{ optional?: boolean }`; without it, a missing principal responds `401` and a wrong-kind principal responds `403`.
 
 ```ts
+import { CurrentUser } from 'exjs-controllers/decorators/CurrentUser'
+
 @Get('/me')
-getMe(@SessionContext() session: SessionContext) {
-  return { subject: session.subject, scopes: session.scopes }
+getMe(@CurrentUser() user: AuthenticatedUser) {
+  return user
+}
+
+@Get('/me-or-anon')
+maybeMe(@CurrentUser({ optional: true }) user?: AuthenticatedUser) {
+  return user ?? { anonymous: true }
 }
 ```
 
-### `AuthenticationContext`
+### Errors
 
-```ts
-interface AuthenticationContext {
-  provider: string
-  scheme: 'oauth2' | 'session'
-  subject?: string
-  scopes: string[]
-  claims: Record<string, unknown>
-}
-```
+`UnauthorizedError` (`401`) and `ForbiddenError` (`403`) are exported from `exjs-controllers/core/authentication`. Handle them in your `errorHandler` to shape the HTTP response.
+
+Full reference: [Authentication](https://thebylito.github.io/exjs-controllers/docs/authentication/configuration/) and [`@Authorized` & principals](https://thebylito.github.io/exjs-controllers/docs/authentication/authorized/).
 
 ---
 
@@ -494,16 +506,17 @@ Requires an OpenTelemetry SDK to be initialised in the application before spans 
 
 | Option | Type | Description |
 |---|---|---|
-| `controllers` | `ControllerClass[]` | List of controller classes to register |
-| `discovery` | `ControllerDiscoveryOptions` | Dynamically discover controllers from directories |
-| `middlewares` | `MiddlewareRegistration[]` | Express middlewares to apply before controllers |
-| `authentication` | `OAuth2AuthenticationOptions` | OAuth2 provider for `@Authorized` routes |
-| `logger` | `HttpLoggerOptions` | Attach a Pino HTTP logger |
+| `controllers` | `ControllerClass[]` | Controller classes to register |
+| `controllerDiscovery` | `ControllerDiscoveryOptions` | Discover controllers from directories when `controllers` is omitted |
+| `authentication` | `AuthenticationConfig` | Principal resolution and permission checks for protected routes |
+| `logger` | `HttpLoggerOptions \| false` | Pino HTTP logger, mounted when provided |
+| `middlewares` | `MiddlewareRegistration[]` | Express middlewares applied before controllers |
+| `errorHandler` | `ErrorMiddleware` | Express error middleware, mounted last |
 | `openapi.documentation` | `OpenApiDocumentationOptions` | OpenAPI document metadata |
 | `openapi.documentPath` | `string` | Path to serve the JSON document (default: `/docs/openapi.json`) |
 | `openapi.documents` | `Record<string, OpenApiDocumentOptions>` | One OpenAPI document (and Scalar UI) per group |
-| `scalar.referencePath` | `string` | Path to serve Scalar reference (default: `/docs`) |
 | `enableScalar` | `boolean` | Mount the Scalar UI |
+| `scalar` | `ScalarConfigurationOptions` | Scalar runtime options; `scalar.referencePath` sets the UI path (default: `/docs`) |
 
 ---
 
@@ -511,11 +524,10 @@ Requires an OpenTelemetry SDK to be initialised in the application before spans 
 
 ```
 exjs-controllers
-exjs-controllers/authentication/*
 exjs-controllers/config/*
 exjs-controllers/core/*
+exjs-controllers/core/authentication
 exjs-controllers/decorators/*
-exjs-controllers/entities/*
 exjs-controllers/http/*
 exjs-controllers/logging/*
 exjs-controllers/metadata/*
@@ -528,26 +540,10 @@ exjs-controllers/schemas/*
 
 ## Changelog
 
-### 0.3.0
-
-- **`@SessionContext()`** — new parameter decorator that injects `AuthenticationContext` into a handler. Responds `401` automatically when no active session exists.
-- **`outputIsArray`** in `RouteOptions` — when `true`, the OpenAPI response schema is generated as an array of `outputClass` items.
-- **`classToZod` inheritance** — `@Field` decorators declared on parent DTO classes are now included when building the Zod schema for child classes.
-- **`DefineUseCase` extra args** — `execute(input, ...extraArgs)` now forwards arguments that appear after the first `BaseSchema` parameter.
-
-### 0.2.1
-
-- Fix import path for `TraceSpan`.
-
-### 0.2.0
-
-- Initial public release with controllers, DI, OpenAPI generation and Scalar integration.
+See [CHANGELOG.md](./CHANGELOG.md).
 
 ---
 
-## Publish
+## Releasing
 
-```bash
-npm run publish:dry-run   # preview what will be published
-npm publish               # publish to npm
-```
+Releases are automated: pushing a `vX.Y.Z` tag publishes to npm and creates the GitHub Release. See [RELEASING.md](./RELEASING.md).

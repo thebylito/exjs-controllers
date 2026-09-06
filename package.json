@@ -37,10 +37,6 @@
       "types": "./dist/config/*.d.ts",
       "default": "./dist/config/*.js"
     },
-    "./authentication/*": {
-      "types": "./dist/authentication/*.d.ts",
-      "default": "./dist/authentication/*.js"
-    },
     "./core/*": {
       "types": "./dist/core/*.d.ts",
       "default": "./dist/core/*.js"
@@ -48,10 +44,6 @@
     "./decorators/*": {
       "types": "./dist/decorators/*.d.ts",
       "default": "./dist/decorators/*.js"
-    },
-    "./entities/*": {
-      "types": "./dist/entities/*.d.ts",
-      "default": "./dist/entities/*.js"
     },
     "./http/*": {
       "types": "./dist/http/*.d.ts",

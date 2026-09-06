@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - `homepage` do pacote e link no README apontam para o site de documentação em GitHub Pages (https://thebylito.github.io/exjs-controllers/).
+- **README atualizado para o contrato atual de autenticação** (`AuthenticationConfig`, `@Authorized`, `@CurrentUser`, `@CurrentApiKey`). As seções ainda descreviam o provider OAuth2 com introspection, `@SessionContext` e `AuthenticationContext`, removidos na 0.5.0. A tabela de opções do `configureApplication` passou a refletir `ExpressServerOptions`, e o changelog e as instruções de publicação embutidos viraram ponteiros para `CHANGELOG.md` e `RELEASING.md`.
+
+### Removed
+
+- **`exports` `./authentication/*` e `./entities/*` do `package.json`.** Apontavam para diretórios que não existem desde a 0.5.0; qualquer import por esses caminhos já falhava.
 
 [0.11.0]: https://github.com/thebylito/exjs-controllers/compare/v0.10.1...v0.11.0
 
