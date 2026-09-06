@@ -65,14 +65,39 @@ export interface OpenApiDocument {
   paths: Record<string, Partial<Record<HttpMethodType, OpenApiOperation>>>
 }
 
+/** Grupo atribuído às rotas que não declaram `group` nem no controller nem na rota. */
+export const DEFAULT_OPENAPI_GROUP = 'default'
+
+/**
+ * Recorte de um documento: quais grupos entram e quais campos do documento
+ * sobrescrevem a base em `openapi.documentation`.
+ */
+export interface OpenApiDocumentSelection {
+  /** Grupos incluídos. Omitido, o documento inclui todas as rotas. */
+  groups?: string[]
+  info?: OpenApiDocumentationOptions['info']
+  security?: OpenApiSecurityRequirement[]
+}
+
+export function resolveRouteGroup(
+  controllerMeta: Pick<ControllerMeta, 'group'>,
+  route: Pick<RouteMetadata, 'group'>,
+): string {
+  return route.group ?? controllerMeta.group ?? DEFAULT_OPENAPI_GROUP
+}
+
 export function generateOpenApiDocument(
   controllers: ControllerClass[],
   options: ExpressServerOptions,
+  selection: OpenApiDocumentSelection = {},
 ): OpenApiDocument {
-  const info = options.openapi?.documentation.info ?? {
-    title: 'API Reference',
-    version: '1.0.0',
-  }
+  const info = selection.info ??
+    options.openapi?.documentation.info ?? {
+      title: 'API Reference',
+      version: '1.0.0',
+    }
+  const security = selection.security ?? options.openapi?.documentation.security
+  const includedGroups = selection.groups ? new Set(selection.groups) : undefined
 
   const paths: OpenApiDocument['paths'] = {}
 
@@ -82,6 +107,13 @@ export function generateOpenApiDocument(
     const controllerParams = legacyParamMap.get(controller.prototype) ?? new Map()
 
     for (const route of routes) {
+      if (
+        includedGroups &&
+        !includedGroups.has(resolveRouteGroup(controllerMeta, route))
+      ) {
+        continue
+      }
+
       const fullPath = normalizePath(controllerMeta.prefix, route.path)
       const authorization = getAuthorizationMetadata(controller, route.handlerName)
 
@@ -100,17 +132,13 @@ export function generateOpenApiDocument(
     }
   }
 
+  const components = buildComponents(options)
+
   return {
     openapi: '3.1.0',
     info,
-    ...(buildComponents(options)
-      ? {
-        components: buildComponents(options),
-      }
-      : {}),
-    ...(options.openapi?.documentation.security
-      ? { security: options.openapi.documentation.security }
-      : {}),
+    ...(components ? { components } : {}),
+    ...(security ? { security } : {}),
     paths,
   }
 }

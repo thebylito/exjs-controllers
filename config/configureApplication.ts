@@ -11,29 +11,36 @@ import { discoverControllers } from '#exjs-controllers/core/discoverControllers'
 import type {
   ExpressServerOptions,
   MiddlewareRegistration,
+  OpenApiDocumentOptions,
   ScalarConfigurationOptions,
 } from '#exjs-controllers/config/expressServerOptions'
 import type { Application } from '#exjs-controllers/http/application'
 import { ensureHttpContext, type Handler } from '#exjs-controllers/http/httpTypes'
 import { createHttpLoggerMiddleware } from '#exjs-controllers/logging/httpLogger'
-import { generateOpenApiDocument } from '#exjs-controllers/openapi/generateOpenApiDocument'
+import {
+  DEFAULT_OPENAPI_GROUP,
+  generateOpenApiDocument,
+  type OpenApiDocument,
+} from '#exjs-controllers/openapi/generateOpenApiDocument'
 
 const DEFAULT_OPENAPI_DOCUMENT_PATH = '/docs/openapi.json'
 const DEFAULT_SCALAR_REFERENCE_PATH = '/docs'
+
+interface ResolvedOpenApiDocument {
+  key: string
+  documentPath: string
+  referencePath: string
+  document: OpenApiDocument
+}
 
 export async function configureApplication(
   app: Application,
   options: ExpressServerOptions,
 ): Promise<Application> {
   const controllers = await resolveControllers(options)
-  const openApiDocumentPath = resolveOpenApiDocumentPath(options)
-  const scalarReferencePath = resolveScalarReferencePath(options)
-  const openApiDocument = shouldServeOpenApi(options)
-    ? generateOpenApiDocument(controllers, options)
-    : undefined
-  const scalarConfiguration = openApiDocument
-    ? buildScalarConfiguration(options, openApiDocument)
-    : undefined
+  const openApiDocuments = shouldServeOpenApi(options)
+    ? resolveOpenApiDocuments(controllers, options)
+    : []
 
   const bindHttpContext: Handler = (request, response, next) => {
     ensureHttpContext(request, response)
@@ -50,31 +57,41 @@ export async function configureApplication(
 
   applyMiddlewares(app, options.middlewares ?? [])
 
-  if (openApiDocument) {
-    app.get(openApiDocumentPath, (_request, response) => {
-      response.json(openApiDocument)
+  for (const entry of openApiDocuments) {
+    app.get(entry.documentPath, (_request, response) => {
+      response.json(entry.document)
     })
   }
 
   if (options.enableScalar) {
-    if (!openApiDocument) {
+    if (openApiDocuments.length === 0) {
       throw new Error(
         '[OpenAPI] enableScalar requires openapi documentation info to generate the reference document.',
       )
     }
 
-    // Scalar resolves request snippets from the runtime config, so the current
-    // origin needs to be injected when the HTML is rendered for each request.
-    const serveScalarReference: Handler = (request, response, next) => {
-      const scalarMiddleware = apiReference({
-        url: openApiDocumentPath,
-        ...resolveScalarConfigurationForRequest(request, scalarConfiguration),
-      }) as Handler
+    // `app.use('/docs')` também casa `/docs/admin`, então o Scalar de um
+    // documento aninhado precisa ser montado antes do documento pai.
+    const byLongestReferencePath = [...openApiDocuments].sort(
+      (a, b) => b.referencePath.length - a.referencePath.length,
+    )
 
-      scalarMiddleware(request, response, next)
+    for (const entry of byLongestReferencePath) {
+      const scalarConfiguration = buildScalarConfiguration(options, entry.document)
+
+      // Scalar resolves request snippets from the runtime config, so the current
+      // origin needs to be injected when the HTML is rendered for each request.
+      const serveScalarReference: Handler = (request, response, next) => {
+        const scalarMiddleware = apiReference({
+          url: entry.documentPath,
+          ...resolveScalarConfigurationForRequest(request, scalarConfiguration),
+        }) as Handler
+
+        scalarMiddleware(request, response, next)
+      }
+
+      app.use(entry.referencePath, serveScalarReference)
     }
-
-    app.use(scalarReferencePath, serveScalarReference)
   }
 
   registerControllersWithOptions(app, options, ...controllers)
@@ -206,6 +223,111 @@ function resolveOpenApiDocumentPath(options: ExpressServerOptions): string {
 
 function resolveScalarReferencePath(options: ExpressServerOptions): string {
   return options.scalar?.referencePath ?? DEFAULT_SCALAR_REFERENCE_PATH
+}
+
+/**
+ * Sem `openapi.documents`, há um único documento com todas as rotas nos
+ * caminhos de sempre. Com `documents`, cada chave vira um documento próprio:
+ * o `default` herda `openapi.documentPath` e `scalar.referencePath`; os demais
+ * ficam em `<scalar.referencePath>/<chave>` e `<referencePath>/openapi.json`,
+ * salvo caminhos explícitos.
+ */
+function resolveOpenApiDocuments(
+  controllers: ControllerClass[],
+  options: ExpressServerOptions,
+): ResolvedOpenApiDocument[] {
+  const baseDocumentPath = resolveOpenApiDocumentPath(options)
+  const baseReferencePath = resolveScalarReferencePath(options)
+  const documents = options.openapi?.documents
+
+  if (!documents) {
+    return [
+      {
+        key: DEFAULT_OPENAPI_GROUP,
+        documentPath: baseDocumentPath,
+        referencePath: baseReferencePath,
+        document: generateOpenApiDocument(controllers, options),
+      },
+    ]
+  }
+
+  const entries = Object.entries(documents)
+
+  if (entries.length === 0) {
+    throw new Error(
+      '[OpenAPI] openapi.documents está vazio. Remova a opção para servir um único documento ou declare ao menos um documento.',
+    )
+  }
+
+  const resolved = entries.map(([key, documentOptions]) =>
+    resolveOpenApiDocument(key, documentOptions, {
+      controllers,
+      options,
+      baseDocumentPath,
+      baseReferencePath,
+    }),
+  )
+
+  assertUniqueDocumentPaths(resolved)
+
+  return resolved
+}
+
+function resolveOpenApiDocument(
+  key: string,
+  documentOptions: OpenApiDocumentOptions,
+  context: {
+    controllers: ControllerClass[]
+    options: ExpressServerOptions
+    baseDocumentPath: string
+    baseReferencePath: string
+  },
+): ResolvedOpenApiDocument {
+  const isDefault = key === DEFAULT_OPENAPI_GROUP
+  const referencePath =
+    documentOptions.referencePath ??
+    (isDefault ? context.baseReferencePath : joinPath(context.baseReferencePath, key))
+  const documentPath =
+    documentOptions.documentPath ??
+    (isDefault ? context.baseDocumentPath : joinPath(referencePath, 'openapi.json'))
+
+  return {
+    key,
+    documentPath,
+    referencePath,
+    document: generateOpenApiDocument(context.controllers, context.options, {
+      groups: documentOptions.groups ?? [key],
+      info: documentOptions.info,
+      security: documentOptions.security,
+    }),
+  }
+}
+
+function assertUniqueDocumentPaths(documents: ResolvedOpenApiDocument[]): void {
+  const seen = new Map<string, string>()
+
+  for (const entry of documents) {
+    for (const [field, value] of [
+      ['documentPath', entry.documentPath],
+      ['referencePath', entry.referencePath],
+    ] as const) {
+      const previous = seen.get(`${field}:${value}`)
+
+      if (previous !== undefined) {
+        throw new Error(
+          `[OpenAPI] ${field} "${value}" está repetido nos documentos "${previous}" e "${entry.key}". Cada documento precisa de caminhos próprios.`,
+        )
+      }
+
+      seen.set(`${field}:${value}`, entry.key)
+    }
+  }
+}
+
+function joinPath(base: string, segment: string): string {
+  const trimmedBase = base.replace(/\/+$/, '')
+  const trimmedSegment = segment.replace(/^\/+/, '')
+  return `${trimmedBase}/${trimmedSegment}`
 }
 
 function resolveScalarConfigurationForRequest(

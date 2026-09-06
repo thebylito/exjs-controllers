@@ -73,7 +73,7 @@ app.listen(3000)
 
 ## Controllers
 
-### `@Controller(prefix)`
+### `@Controller(prefix, options?)`
 
 Registers a class as a controller. All routes inside will be prefixed with `prefix`.
 
@@ -82,9 +82,11 @@ Registers a class as a controller. All routes inside will be prefixed with `pref
 class UsersController { ... }
 ```
 
-### `@JsonController(prefix)`
+`options.group` puts every route of the controller in an OpenAPI documentation group (see [Multiple documents](#multiple-documents)). It does not affect routing.
 
-Like `@Controller`, but automatically serialises the return value with `res.json()` instead of `res.send()`.
+### `@JsonController(prefix, options?)`
+
+Like `@Controller`, but automatically serialises the return value with `res.json()` instead of `res.send()`. Accepts the same `options`.
 
 ```ts
 @JsonController('/api/v1/users')
@@ -115,6 +117,7 @@ All route decorators accept a path and an optional `RouteOptions` object.
 | `summary` | `string` | Short description shown in the OpenAPI docs |
 | `description` | `string` | Long description shown in the OpenAPI docs |
 | `tags` | `string[]` | OpenAPI tags for grouping |
+| `group` | `string` | OpenAPI documentation group; overrides the controller's `group` (default: `default`) |
 
 ```ts
 @Get('/items', {
@@ -417,7 +420,30 @@ const document = generateOpenApiDocument([UsersController], options)
 
 When `openapi.documentation` is set, the document is automatically served at `/docs/openapi.json` (configurable via `openapi.documentPath`).
 
-When `enableScalar: true` is set, Scalar API reference is served at `/docs` (configurable via `openapi.scalarPath`).
+When `enableScalar: true` is set, Scalar API reference is served at `/docs` (configurable via `scalar.referencePath`).
+
+### Multiple documents
+
+Declare a `group` on controllers or routes and configure one document per group with `openapi.documents`. Each document gets its own JSON and, with `enableScalar`, its own Scalar UI. Routes in a group that no document references are not exposed anywhere.
+
+```ts
+@JsonController('/admin/users', { group: 'admin' })
+class AdminUsersController { ... }
+
+await configureApplication(app, {
+  controllers: [UsersController, AdminUsersController],
+  openapi: {
+    documentation: { info: { title: 'My API', version: '1.0.0' } },
+    documents: {
+      default: {}, // routes without a group → /docs/openapi.json, Scalar at /docs
+      admin: {},   // group "admin"          → /docs/admin/openapi.json, Scalar at /docs/admin
+    },
+  },
+  enableScalar: true,
+})
+```
+
+Without `documents`, a single document includes every route. See the [documentation](https://thebylito.github.io/exjs-controllers/docs/documentation/openapi/#multiple-documents) for path and resolution rules.
 
 ### Security schemes in OpenAPI
 
@@ -475,7 +501,8 @@ Requires an OpenTelemetry SDK to be initialised in the application before spans 
 | `logger` | `HttpLoggerOptions` | Attach a Pino HTTP logger |
 | `openapi.documentation` | `OpenApiDocumentationOptions` | OpenAPI document metadata |
 | `openapi.documentPath` | `string` | Path to serve the JSON document (default: `/docs/openapi.json`) |
-| `openapi.scalarPath` | `string` | Path to serve Scalar reference (default: `/docs`) |
+| `openapi.documents` | `Record<string, OpenApiDocumentOptions>` | One OpenAPI document (and Scalar UI) per group |
+| `scalar.referencePath` | `string` | Path to serve Scalar reference (default: `/docs`) |
 | `enableScalar` | `boolean` | Mount the Scalar UI |
 
 ---

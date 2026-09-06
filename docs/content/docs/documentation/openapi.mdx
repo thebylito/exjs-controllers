@@ -49,6 +49,7 @@ await writeFile('openapi.json', JSON.stringify(document, null, 2))
 | `paths['/...'].<method>.security`                         | `@Authorized` permissions + non-optional `@CurrentUser`/`@CurrentApiKey` kinds          |
 | `components.securitySchemes`                              | `openapi.documentation.components.securitySchemes` ∪ `authentication.openApiSecuritySchemes` |
 | `security`                                                | `openapi.documentation.security` (document-wide)                                        |
+| which document(s) contain an operation                    | `RouteOptions.group` → `@Controller(prefix, { group })` → `default`, matched against `openapi.documents` |
 
 Path parameters use Express syntax (`:id`) in your code; the generator rewrites them to OpenAPI syntax (`{id}`).
 
@@ -119,6 +120,71 @@ A route declared as `@Authorized({ kinds: ['user'], permissions: ['orders:read']
 
 ```json
 { "security": [{ "bearerAuth": ["orders:read"] }] }
+```
+
+## Multiple documents
+
+By default every route ends up in a single document. When one API serves different audiences — a public API and an admin API, for example — declare a **group** on controllers or routes and configure one document per group with `openapi.documents`.
+
+```ts
+@JsonController('/users')
+class UsersController { /* no group → "default" */ }
+
+@JsonController('/admin/users', { group: 'admin' })
+class AdminUsersController {
+  @Get('/') list() { /* group "admin" */ }
+
+  @Post('/reindex', { group: 'internal' }) // route-level override
+  reindex() { /* group "internal" */ }
+}
+
+await configureApplication(app, {
+  controllers: [UsersController, AdminUsersController],
+  openapi: {
+    documentation: { info: { title: 'My API', version: '1.0.0' } },
+    documents: {
+      default: {},
+      admin: { info: { title: 'My API — Admin', version: '1.0.0' } }
+    }
+  },
+  enableScalar: true
+})
+```
+
+This serves two documents, each with its own Scalar UI:
+
+| Document  | Routes                  | JSON                       | Scalar        |
+| --------- | ----------------------- | -------------------------- | ------------- |
+| `default` | routes without a group  | `/docs/openapi.json`       | `/docs`       |
+| `admin`   | routes in group `admin` | `/docs/admin/openapi.json` | `/docs/admin` |
+
+The `internal` group is not referenced by any document, so `POST /admin/users/reindex` is not exposed in either. The route itself keeps working — groups only affect documentation.
+
+### Resolution rules
+
+- A route's group is `RouteOptions.group`, then the controller's `group`, then `default`.
+- Without `openapi.documents`, a single document includes every route regardless of group. Adding a `group` never hides a route until you opt in to `documents`.
+- Each document includes the groups listed in `groups`, which defaults to the document's own key. One document can combine groups: `{ groups: ['default', 'admin'] }`.
+- `info` and `security` can be overridden per document. `components` — including security schemes — are shared by all documents.
+
+### Paths
+
+| Key         | `documentPath` default                         | `referencePath` default                |
+| ----------- | ---------------------------------------------- | -------------------------------------- |
+| `default`   | `openapi.documentPath` (`/docs/openapi.json`)  | `scalar.referencePath` (`/docs`)       |
+| any other   | `<referencePath>/openapi.json`                 | `<scalar.referencePath>/<key>`         |
+
+Both can be set explicitly per document. Duplicate paths across documents throw at bootstrap.
+
+### Programmatic generation per group
+
+`generateOpenApiDocument` accepts a third argument with the same `groups`, `info` and `security` fields:
+
+```ts
+const adminDocument = generateOpenApiDocument(controllers, options, {
+  groups: ['admin'],
+  info: { title: 'My API — Admin', version: '1.0.0' }
+})
 ```
 
 ## Inspecting the spec

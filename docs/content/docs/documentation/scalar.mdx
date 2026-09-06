@@ -102,3 +102,7 @@ await configureApplication(app, {
 ```
 
 After this, the JSON is at `/internal/openapi.json` and the UI is at `/reference`.
+
+## One reference per document
+
+When `openapi.documents` is configured, `enableScalar: true` mounts one Scalar UI per document, each loading its own JSON. With the defaults, the public UI stays at `/docs` and a document keyed `admin` gets `/docs/admin`. `scalar.referencePath` is the base for the derived paths, and every document can set its own `referencePath`. See [Multiple documents](/docs/documentation/openapi#multiple-documents) for the full rules.
