@@ -8,9 +8,10 @@ Declarative controllers, DTO validation, dependency injection, OpenAPI generatio
 
 ```bash
 npm install exjs-controllers express zod
+npm install -D @types/express   # Express types for TypeScript
 ```
 
-Peer dependencies: `express ^5`, `zod ^4`.
+`express ^5` and `zod ^4` are peer dependencies: your project owns them, so the schemas you pass to `@Field` and the middlewares you register share one copy with the framework. npm and pnpm install peers automatically; with Yarn, add them explicitly as above. Requires Node.js `>=22`.
 
 ---
 

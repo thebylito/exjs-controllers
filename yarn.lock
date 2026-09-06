@@ -827,6 +827,13 @@ __metadata:
     vite: "npm:^8.2.2"
     vitest: "npm:^5.0.0"
     zod: "npm:^4.5.4"
+  peerDependencies:
+    "@types/express": ^5.0.0
+    express: ^5.0.0
+    zod: ^4.0.0
+  peerDependenciesMeta:
+    "@types/express":
+      optional: true
   languageName: unknown
   linkType: soft
 

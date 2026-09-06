@@ -6,13 +6,13 @@ icon: Lightning
 
 ## Requirements
 
-- **Node.js** `>=20`
-- **TypeScript** `^6` with decorator metadata enabled
-- **Peers** — `express ^5`, `zod ^4`
+- **Node.js** `>=22`
+- **TypeScript** `5.2` or newer
+- **Peers** — `express ^5` and `zod ^4`, installed by your project. TypeScript projects also need `@types/express`.
 
 ## TypeScript configuration
 
-`exjs-controllers` ships with both the modern (TC39) and legacy (`experimentalDecorators`) decorator implementations. Choose one and keep it consistent across your project.
+Parameter decorators such as `@Body()`, `@Param()` and `@CurrentUser()` only exist in TypeScript's legacy decorator implementation, so enable `experimentalDecorators`. `emitDecoratorMetadata` is **not** required: the framework never reads `design:*` metadata — every decorator receives what it needs explicitly (`@Body(CreateUserInput)`, `@Field(z.string())`).
 
 ```json title="tsconfig.json"
 {
@@ -20,15 +20,14 @@ icon: Lightning
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "experimentalDecorators": false,
-    "emitDecoratorMetadata": false,
+    "experimentalDecorators": true,
     "useDefineForClassFields": false
   }
 }
 ```
 
-<Callout title="Legacy decorators">
-  If your build pipeline pre-dates TC39 decorators, set `experimentalDecorators: true` and `emitDecoratorMetadata: true`. The decorators automatically detect which mode they are running under.
+<Callout title="TC39 decorators">
+  Class and method decorators (`@Controller`, `@Get`, `@Authorized`, ...) also run under the standard TC39 implementation and detect the mode automatically. Because the standard has no parameter decorators, any project using `@Body`, `@Param`, `@CurrentUser` and friends still needs `experimentalDecorators: true`.
 </Callout>
 
 ## Project layout

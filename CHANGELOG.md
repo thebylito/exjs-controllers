@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [0.11.0] — 2026-09-05
 
+### Breaking
+
+- **`express` e `zod` passam a ser `peerDependencies`** (`express ^5`, `zod ^4`), como a documentação já dizia. As schemas passadas a `@Field` e os middlewares registrados precisam vir da mesma cópia de `zod` e `express` que a lib usa; como dependências normais, o gerenciador de pacotes podia resolver duas cópias e quebrar `instanceof` e `z.toJSONSchema` em silêncio. npm e pnpm instalam peers automaticamente; no Yarn, `yarn add express zod` se ainda não estiverem no projeto. `@types/express` entra como peer opcional, porque os `.d.ts` publicados importam tipos do Express.
+
 ### Added
 
 - **Grupos de documentação OpenAPI.** `@Controller(prefix, { group })`, `@JsonController(prefix, { group })` e `RouteOptions.group` classificam rotas em grupos, e `openapi.documents` serve um documento por grupo, cada um com `documentPath`, `referencePath`, `groups`, `info` e `security` próprios. Com `enableScalar`, cada documento ganha o seu Scalar (por padrão em `/docs/<chave>`). Sem `documents`, nada muda: um único documento com todas as rotas. Grupo que nenhum documento referencia não é exposto em lugar nenhum, o que serve para rotas internas. Grupos não afetam o roteamento.
@@ -16,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - `homepage` do pacote e link no README apontam para o site de documentação em GitHub Pages (https://thebylito.github.io/exjs-controllers/).
+- **Getting Started corrigido**: Node 22, TypeScript 5.2 ou mais novo, `experimentalDecorators: true` obrigatório porque os parameter decorators (`@Body`, `@Param`, `@CurrentUser`) só existem na implementação legada, e `emitDecoratorMetadata` dispensável. A página recomendava `experimentalDecorators: false`, configuração com a qual o próprio exemplo da página não compila.
 - **README atualizado para o contrato atual de autenticação** (`AuthenticationConfig`, `@Authorized`, `@CurrentUser`, `@CurrentApiKey`). As seções ainda descreviam o provider OAuth2 com introspection, `@SessionContext` e `AuthenticationContext`, removidos na 0.5.0. A tabela de opções do `configureApplication` passou a refletir `ExpressServerOptions`, e o changelog e as instruções de publicação embutidos viraram ponteiros para `CHANGELOG.md` e `RELEASING.md`.
 
 ### Removed
