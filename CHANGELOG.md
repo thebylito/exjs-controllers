@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.11.0] — 2026-09-05
+
+### Added
+
+- **Grupos de documentação OpenAPI.** `@Controller(prefix, { group })`, `@JsonController(prefix, { group })` e `RouteOptions.group` classificam rotas em grupos, e `openapi.documents` serve um documento por grupo, cada um com `documentPath`, `referencePath`, `groups`, `info` e `security` próprios. Com `enableScalar`, cada documento ganha o seu Scalar (por padrão em `/docs/<chave>`). Sem `documents`, nada muda: um único documento com todas as rotas. Grupo que nenhum documento referencia não é exposto em lugar nenhum, o que serve para rotas internas. Grupos não afetam o roteamento.
+- **`generateOpenApiDocument(controllers, options, { groups, info, security })`** — terceiro argumento para gerar o documento de um grupo em build.
+
+### Changed
+
+- `homepage` do pacote e link no README apontam para o site de documentação em GitHub Pages (https://thebylito.github.io/exjs-controllers/).
+
+[0.11.0]: https://github.com/thebylito/exjs-controllers/compare/v0.10.1...v0.11.0
+
+---
+
 ## [0.10.1] — 2026-09-05
 
 ### Fixed

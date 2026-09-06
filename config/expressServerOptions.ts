@@ -132,6 +132,31 @@ export interface ScalarConfigurationOptions {
   onBeforeRequest?: (context: ScalarBeforeRequestContext) => void | Promise<void>
 }
 
+/**
+ * Um documento OpenAPI servido separadamente, contendo só as rotas dos grupos
+ * indicados. A chave em `openapi.documents` identifica o documento e, por
+ * padrão, também é o único grupo incluído nele.
+ */
+export interface OpenApiDocumentOptions {
+  /**
+   * Caminho do JSON deste documento. Padrão: `openapi.documentPath` para a
+   * chave `default`; `<referencePath>/openapi.json` para as demais.
+   */
+  documentPath?: string
+  /**
+   * Caminho do Scalar deste documento, quando `enableScalar` está ativo.
+   * Padrão: `scalar.referencePath` para a chave `default`;
+   * `<scalar.referencePath>/<chave>` para as demais.
+   */
+  referencePath?: string
+  /** Grupos incluídos no documento. Padrão: `[chave]`. */
+  groups?: string[]
+  /** Sobrescreve `documentation.info` só neste documento. */
+  info?: OpenApiDocumentationOptions['info']
+  /** Sobrescreve `documentation.security` só neste documento. */
+  security?: OpenApiSecurityRequirement[]
+}
+
 export interface ExpressServerOptions {
   controllers?: ControllerClass[]
   controllerDiscovery?: ControllerDiscoveryOptions
@@ -142,6 +167,14 @@ export interface ExpressServerOptions {
   openapi?: {
     documentPath?: string
     documentation: OpenApiDocumentationOptions
+    /**
+     * Documentos separados por grupo (`@Controller(prefix, { group })` e
+     * `RouteOptions.group`). Sem esta opção, um único documento inclui todas
+     * as rotas, independentemente de grupo. Com ela, cada documento inclui só
+     * os seus grupos, e um grupo que nenhum documento referencia não é
+     * exposto em lugar nenhum.
+     */
+    documents?: Record<string, OpenApiDocumentOptions>
   }
   scalar?: ScalarConfigurationOptions
   enableScalar?: boolean

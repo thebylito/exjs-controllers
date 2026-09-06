@@ -31,8 +31,8 @@ app.listen(3000)
 3. Mounts the HTTP logger middleware if `logger` is set.
 4. For every `@JsonController(prefix)`, mounts `express.json()` scoped to `prefix`.
 5. Applies user-defined middlewares from `middlewares`.
-6. Serves the OpenAPI JSON at `openapi.documentPath` (default `/docs/openapi.json`) when `openapi` is set.
-7. Mounts Scalar at `scalar.referencePath` (default `/docs`) when `enableScalar: true`.
+6. Serves the OpenAPI JSON at `openapi.documentPath` (default `/docs/openapi.json`) when `openapi` is set — or one JSON per entry in `openapi.documents`.
+7. Mounts Scalar at `scalar.referencePath` (default `/docs`) when `enableScalar: true` — or one UI per document.
 8. Registers every controller's routes, wiring the authentication middleware where needed.
 9. Mounts `errorHandler` last, if provided.
 
@@ -49,6 +49,7 @@ interface ExpressServerOptions {
   openapi?: {
     documentPath?: string
     documentation: OpenApiDocumentationOptions
+    documents?: Record<string, OpenApiDocumentOptions>
   }
   scalar?: ScalarConfigurationOptions
   enableScalar?: boolean
@@ -133,6 +134,20 @@ openapi: {
   }
 }
 ```
+
+Add `documents` to split routes into separate documents by group. Each entry accepts `documentPath`, `referencePath`, `groups`, `info` and `security`:
+
+```ts
+openapi: {
+  documentation: { info: { title: 'My API', version: '1.0.0' } },
+  documents: {
+    default: {},                                   // routes without a group
+    admin: { info: { title: 'Admin API', version: '1.0.0' } } // @Controller(prefix, { group: 'admin' })
+  }
+}
+```
+
+See [Multiple documents](/docs/documentation/openapi#multiple-documents) for the resolution and path rules.
 
 ### `enableScalar`
 

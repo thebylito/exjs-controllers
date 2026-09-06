@@ -18,6 +18,11 @@ export interface RouteOptions {
   summary?: string
   description?: string
   tags?: string[]
+  /**
+   * Grupo de documentação OpenAPI da rota. Sobrescreve o `group` do
+   * controller. Sem grupo em nenhum dos dois, a rota pertence a `"default"`.
+   */
+  group?: string
 }
 
 export interface RouteMetadata extends RouteOptions {
@@ -34,6 +39,8 @@ export interface AuthorizationMetadata {
 export interface ControllerMeta {
   prefix: string
   responseMode: 'default' | 'json'
+  /** Grupo de documentação OpenAPI padrão das rotas do controller. */
+  group?: string
   target: new (...args: any[]) => object
 }
 

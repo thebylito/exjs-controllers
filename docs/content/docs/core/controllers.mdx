@@ -24,7 +24,7 @@ class UsersController {
 }
 ```
 
-## `@Controller(prefix)`
+## `@Controller(prefix, options?)`
 
 Registers a class as a controller. All routes inside the class are mounted under `prefix`.
 
@@ -35,7 +35,14 @@ class UsersController { /* ... */ }
 
 The handler return value is sent with `res.send(result)`. Strings are sent as `text/plain`.
 
-## `@JsonController(prefix)`
+`options.group` assigns every route in the controller to an OpenAPI documentation group. It has no effect on routing — see [Multiple documents](/docs/documentation/openapi#multiple-documents).
+
+```ts
+@Controller('/admin/reports', { group: 'admin' })
+class AdminReportsController { /* ... */ }
+```
+
+## `@JsonController(prefix, options?)`
 
 Like `@Controller`, but the framework forces `application/json` for every handler return:
 
@@ -47,6 +54,8 @@ Like `@Controller`, but the framework forces `application/json` for every handle
 @JsonController('/api/v1/users')
 class UsersController { /* ... */ }
 ```
+
+It accepts the same `options` as `@Controller`.
 
 ## Route decorators
 
@@ -85,6 +94,7 @@ class OrdersController {
 | `summary`        | `string`              | Short, single-line description shown in the OpenAPI docs / Scalar UI.                                |
 | `description`    | `string`              | Long-form description.                                                                                |
 | `tags`           | `string[]`            | OpenAPI tags. Useful for grouping operations in Scalar.                                              |
+| `group`          | `string`              | OpenAPI documentation group. Overrides the controller's `group`; routes without one belong to `default`. See [Multiple documents](/docs/documentation/openapi#multiple-documents). |
 
 ```ts
 @Get('/items', {
