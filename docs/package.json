@@ -11,22 +11,22 @@
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
-    "fumadocs-core": "^16.9.0",
-    "fumadocs-mdx": "^15.0.8",
-    "fumadocs-ui": "^16.9.0",
-    "next": "^16.2.6",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "fumadocs-core": "^16.15.15",
+    "fumadocs-mdx": "^15.4.5",
+    "fumadocs-ui": "^16.15.15",
+    "next": "^16.3.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
     "@types/mdx": "^2.0.13",
-    "@types/node": "^25.9.1",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "postcss": "^8.5.14",
     "tailwindcss": "^4.3.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "packageManager": "yarn@4.18.0"
 }
