@@ -55,7 +55,7 @@ interface OpenApiOperation {
 }
 
 export interface OpenApiDocument {
-  openapi: '3.1.0'
+  openapi: '3.2.0'
   info: {
     title: string
     version: string
@@ -135,7 +135,8 @@ export function generateOpenApiDocument(
   const components = buildComponents(options)
 
   return {
-    openapi: '3.1.0',
+    // 3.2 é a primeira versão com a operação `query` na Path Item.
+    openapi: '3.2.0',
     info,
     ...(components ? { components } : {}),
     ...(security ? { security } : {}),

@@ -5,7 +5,7 @@ import express, { type Express } from 'express'
 import type { ErrorMiddleware, Handler } from '#exjs-controllers/http/httpTypes'
 
 type ListenCallback = () => void
-type RouteMethod = 'get' | 'post' | 'put' | 'delete' | 'patch'
+type RouteMethod = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'query'
 
 export interface Application {
   readonly express: Express
@@ -15,6 +15,7 @@ export interface Application {
   put(path: string, ...handlers: Handler[]): Application
   delete(path: string, ...handlers: Handler[]): Application
   patch(path: string, ...handlers: Handler[]): Application
+  query(path: string, ...handlers: Handler[]): Application
   register(method: RouteMethod, path: string, ...handlers: Handler[]): Application
   listen(port: number, callback?: ListenCallback): Server
   listen(port: number, hostname: string, callback?: ListenCallback): Server
@@ -52,6 +53,12 @@ export function createApplication(): Application {
       expressApp.patch(path, ...handlers)
       return application
     },
+    query(path, ...handlers) {
+      // O Express monta `app.query` a partir de `http.METHODS` (QUERY desde o
+      // Node 22.0), mas `@types/express` ainda não declara o método.
+      ;(expressApp as Express & { query: Express['post'] }).query(path, ...handlers)
+      return application
+    },
     register(method, path, ...handlers) {
       switch (method) {
         case 'get':
@@ -64,6 +71,8 @@ export function createApplication(): Application {
           return application.delete(path, ...handlers)
         case 'patch':
           return application.patch(path, ...handlers)
+        case 'query':
+          return application.query(path, ...handlers)
       }
     },
     listen(

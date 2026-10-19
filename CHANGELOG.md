@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.12.0] — 2026-10-19
+
+### Added
+
+- **Verbo HTTP `QUERY` com o decorator `@QueryMethod(path, options?)`.** Registra a rota com `app.query` do Express (que monta os métodos a partir de `http.METHODS`; o Node tem `QUERY` desde a 22.0, coberto pelo `engines >=22`). O body é lido e hidratado como no `@Post`, então `@Body(Dto)` e `inputClass` funcionam igual. `Application` ganha `query(path, ...handlers)` e `register` aceita `'query'`.
+
+### Changed
+
+- **O documento OpenAPI passa a ser `3.2.0`** (antes `3.1.0`). A 3.2 é a primeira versão com a operação `query` na Path Item, onde as rotas `@QueryMethod` são documentadas, com `requestBody`. O restante do documento não muda.
+
 ## [0.11.1] — 2026-09-06
 
 ### Fixed
@@ -34,6 +44,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **`exports` `./authentication/*` e `./entities/*` do `package.json`.** Apontavam para diretórios que não existem desde a 0.5.0; qualquer import por esses caminhos já falhava.
 
+[0.12.0]: https://github.com/thebylito/exjs-controllers/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/thebylito/exjs-controllers/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/thebylito/exjs-controllers/compare/v0.10.1...v0.11.0
 

@@ -39,3 +39,6 @@ export const Patch = (path: string, options?: RouteOptions) =>
 
 export const Delete = (path: string, options?: RouteOptions) =>
   createRouteDecorator('delete', path, options)
+
+export const QueryMethod = (path: string, options?: RouteOptions) =>
+  createRouteDecorator('query', path, options)
