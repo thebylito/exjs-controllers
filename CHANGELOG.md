@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **O documento OpenAPI passa a ser `3.2.0`** (antes `3.1.0`). A 3.2 é a primeira versão com a operação `query` na Path Item, onde as rotas `@QueryMethod` são documentadas, com `requestBody`. O restante do documento não muda.
 
+### Security
+
+- **`multer` atualizado para `^2.4.0`** ([GHSA-3pph-fpjx-jg34](https://github.com/advisories/GHSA-3pph-fpjx-jg34)): nas versões `>=2.2.0 <2.4.0`, uploads abortados deixavam gravações órfãs em disco, permitindo negação de serviço.
+
 ## [0.11.1] — 2026-09-06
 
 ### Fixed
