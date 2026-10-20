@@ -106,7 +106,10 @@ All route decorators accept a path and an optional `RouteOptions` object.
 @Put(path, options?)
 @Patch(path, options?)
 @Delete(path, options?)
+@QueryMethod(path, options?)
 ```
+
+`@QueryMethod` registers an HTTP `QUERY` route: safe and idempotent like `GET`, but it carries a request body, so `@Body` and `inputClass` work as they do on `@Post`. It is documented under the `query` operation of the OpenAPI document.
 
 ### `RouteOptions`
 
@@ -421,7 +424,7 @@ When `execute` is called, `input.validate()` is invoked automatically. On failur
 
 ### Generating the document
 
-`generateOpenApiDocument(controllers, options)` builds an OpenAPI 3.1 document from the metadata registered by route decorators.
+`generateOpenApiDocument(controllers, options)` builds an OpenAPI 3.2 document from the metadata registered by route decorators.
 
 ```ts
 import { generateOpenApiDocument } from 'exjs-controllers/openapi/generateOpenApiDocument'
@@ -433,7 +436,7 @@ const document = generateOpenApiDocument([UsersController], options)
 
 When `openapi.documentation` is set, the document is automatically served at `/docs/openapi.json` (configurable via `openapi.documentPath`).
 
-When `enableScalar: true` is set, Scalar API reference is served at `/docs` (configurable via `scalar.referencePath`).
+When `enableScalar: true` is set, Scalar API reference is served at `/docs` (configurable via `scalar.referencePath`). The page loads a pinned `@scalar/api-reference` bundle from jsDelivr (`DEFAULT_SCALAR_CDN`), so the UI only changes when the framework bumps it; set `scalar.cdn` to load another version or a self-hosted copy.
 
 ### Multiple documents
 

@@ -8,7 +8,7 @@ export const CONTROLLER_METADATA = Symbol('controller_metadata')
 export const INJECTABLE_METADATA = Symbol('injectable_metadata')
 export const AUTHORIZATION_METADATA = Symbol('authorization_metadata')
 
-export type HttpMethodType = 'get' | 'post' | 'put' | 'delete' | 'patch'
+export type HttpMethodType = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'query'
 export type InjectionToken<T = unknown> = new (...args: any[]) => T
 
 export interface RouteOptions {

@@ -1,6 +1,6 @@
 {
   "name": "exjs-controllers",
-  "version": "0.11.1",
+  "version": "0.12.0",
   "description": "Declarative controllers, DTO validation, dependency injection, OpenAPI and Express bootstrap for TypeScript APIs.",
   "license": "MIT",
   "keywords": [
@@ -104,7 +104,7 @@
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
     "@scalar/express-api-reference": "^0.10.17",
-    "multer": "^2.3.0",
+    "multer": "^2.4.0",
     "pino": "^10.3.1"
   },
   "peerDependencies": {
