@@ -1,5 +1,5 @@
 import { MulterError } from 'multer'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 import { configureApplication } from '#exjs-controllers/config/configureApplication'
@@ -12,7 +12,7 @@ import { Inject, Injectable } from '#exjs-controllers/decorators/DependencyInjec
 import { Field } from '#exjs-controllers/decorators/Field'
 import { Get, Post } from '#exjs-controllers/decorators/HttpMethod'
 import { Body, Res, UploadedFile } from '#exjs-controllers/decorators/Params'
-import { resolveErrorStatus } from '#exjs-controllers/http/errorHandler'
+import { createDefaultErrorHandler, resolveErrorStatus } from '#exjs-controllers/http/errorHandler'
 import { createApplication, type Application } from '#exjs-controllers/http/application'
 import { BaseSchema } from '#exjs-controllers/schemas/BaseSchema'
 
@@ -75,6 +75,37 @@ describe('resolveErrorStatus', () => {
     ['boom', 500],
   ])('%s → %i', (error, status) => {
     expect(resolveErrorStatus(error)).toBe(status)
+  })
+})
+
+describe('createDefaultErrorHandler — headersSent', () => {
+  it('delega a next(error) com o mesmo erro e não escreve resposta', () => {
+    const error = new Error('late')
+    const response = { headersSent: true, status: vi.fn(), json: vi.fn() }
+    const next = vi.fn()
+
+    createDefaultErrorHandler()(error, {} as any, response as any, next)
+
+    expect(next).toHaveBeenCalledTimes(1)
+    expect(next).toHaveBeenCalledWith(error)
+    expect(next.mock.calls[0][0]).toBe(error)
+    expect(response.status).not.toHaveBeenCalled()
+    expect(response.json).not.toHaveBeenCalled()
+  })
+
+  it('responde JSON e não chama next quando headersSent é false', () => {
+    const response: any = { headersSent: false, json: vi.fn() }
+    response.status = vi.fn().mockReturnValue(response)
+    const next = vi.fn()
+
+    createDefaultErrorHandler()(new Error('x'), {} as any, response, next)
+
+    expect(response.status).toHaveBeenCalledWith(500)
+    expect(response.json).toHaveBeenCalledWith({
+      error: 'Internal Server Error',
+      message: 'Internal Server Error',
+    })
+    expect(next).not.toHaveBeenCalled()
   })
 })
 
