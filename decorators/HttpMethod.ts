@@ -1,4 +1,5 @@
 import { ROUTE_METADATA, type HttpMethodType, type RouteMetadata, type RouteOptions } from '#exjs-controllers/metadata/symbols'
+import { ownMetadataEntry } from '#exjs-controllers/metadata/ownMetadata'
 import { legacyRouteMap } from '#exjs-controllers/metadata/legacyStorage'
 
 function createRouteDecorator(method: HttpMethodType, path: string, options: RouteOptions = {}) {
@@ -13,8 +14,12 @@ function createRouteDecorator(method: HttpMethodType, path: string, options: Rou
       const ctx = ctxOrKey as ClassMethodDecoratorContext
       routeMeta.handlerName = ctx.name
       const meta = ctx.metadata as Record<symbol, unknown>
-      if (!meta[ROUTE_METADATA]) meta[ROUTE_METADATA] = [] as RouteMetadata[]
-      ;(meta[ROUTE_METADATA] as RouteMetadata[]).push(routeMeta)
+      ownMetadataEntry<RouteMetadata[]>(
+        meta,
+        ROUTE_METADATA,
+        () => [],
+        (inherited) => [...inherited],
+      ).push(routeMeta)
       return
     }
 

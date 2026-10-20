@@ -2,6 +2,7 @@ import {
   AUTHORIZATION_METADATA,
   type AuthorizationMetadata,
 } from '#exjs-controllers/metadata/symbols'
+import { ownMetadataEntry } from '#exjs-controllers/metadata/ownMetadata'
 import { legacyAuthorizationMap } from '#exjs-controllers/metadata/legacyStorage'
 import type { PrincipalKind } from '#exjs-controllers/core/authentication/types'
 
@@ -36,12 +37,13 @@ export function Authorized(
   ): void {
     if (isStandardMethodDecoratorContext(ctxOrKey)) {
       const metadata = ctxOrKey.metadata as Record<symbol, unknown>
-      const authorizationMap =
-        (metadata[AUTHORIZATION_METADATA] as
-          | Map<string | symbol, AuthorizationMetadata>
-          | undefined) ?? new Map<string | symbol, AuthorizationMetadata>()
+      const authorizationMap = ownMetadataEntry(
+        metadata,
+        AUTHORIZATION_METADATA,
+        () => new Map<string | symbol, AuthorizationMetadata>(),
+        (inherited) => new Map(inherited),
+      )
       authorizationMap.set(ctxOrKey.name, authorization)
-      metadata[AUTHORIZATION_METADATA] = authorizationMap
       return
     }
 
