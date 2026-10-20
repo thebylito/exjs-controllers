@@ -51,6 +51,16 @@ await configureApplication(app, {
 
 When `scalar.servers` is omitted, the framework injects a single entry pointing at the request origin (`<protocol>://<host>`).
 
+## Scalar version
+
+The page loads the `@scalar/api-reference` bundle from jsDelivr pinned to the version exported as `DEFAULT_SCALAR_CDN` (currently `1.75.0`), so the UI only changes when the framework bumps it. Set `scalar.cdn` to load another version or a self-hosted copy:
+
+```ts
+scalar: {
+  cdn: 'https://static.example.com/scalar/api-reference.js'
+}
+```
+
 ## Authentication
 
 If you registered schemes through `authentication.openApiSecuritySchemes`, the framework pre-fills Scalar's auth panel:

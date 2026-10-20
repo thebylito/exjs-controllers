@@ -4,7 +4,7 @@ description: Class-based controllers, JSON controllers and HTTP method decorator
 icon: CompassTool
 ---
 
-A **controller** is a class decorated with `@Controller` or `@JsonController`. Each method decorated with `@Get`, `@Post`, `@Put`, `@Patch` or `@Delete` is registered as an Express route under the controller's prefix.
+A **controller** is a class decorated with `@Controller` or `@JsonController`. Each method decorated with `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete` or `@QueryMethod` is registered as an Express route under the controller's prefix.
 
 ```ts
 import { JsonController } from 'exjs-controllers/decorators/Controller'
@@ -65,6 +65,7 @@ It accepts the same `options` as `@Controller`.
 @Put(path, options?)
 @Patch(path, options?)
 @Delete(path, options?)
+@QueryMethod(path, options?)
 ```
 
 Express 5 path syntax applies — including `:param` and `*` segments. The resulting registered path is `controllerPrefix + routePath`, normalized to remove duplicate slashes.
@@ -79,6 +80,20 @@ class OrdersController {
   updateStatus() { /* PATCH /orders/:id/status */ }
 }
 ```
+
+### `@QueryMethod`
+
+`@QueryMethod` registers an HTTP `QUERY` route: safe and idempotent like `GET`, but it carries a request body. Use it for searches whose filters do not fit in a query string. The body is parsed and validated exactly as in `@Post`, so `@Body(Dto)` and `inputClass` work unchanged.
+
+```ts
+@JsonController('/orders')
+class OrdersController {
+  @QueryMethod('/search', { inputClass: SearchOrdersInput, outputClass: OrderOutput, outputIsArray: true })
+  search(@Body(SearchOrdersInput) filters: SearchOrdersInput) { /* QUERY /orders/search */ }
+}
+```
+
+In the OpenAPI document the route is listed under the `query` operation, with its request body.
 
 <Callout title="Duplicate routes">
   Registering the same `METHOD path` twice — even from different controllers — throws at bootstrap time. The framework keeps an internal `Set` of registered routes to surface conflicts early.
