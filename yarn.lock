@@ -178,59 +178,60 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@scalar/client-side-rendering@npm:0.3.10":
-  version: 0.3.10
-  resolution: "@scalar/client-side-rendering@npm:0.3.10"
+"@scalar/client-side-rendering@npm:0.4.12":
+  version: 0.4.12
+  resolution: "@scalar/client-side-rendering@npm:0.4.12"
   dependencies:
-    "@scalar/schemas": "npm:0.8.4"
-    "@scalar/types": "npm:0.18.3"
-    "@scalar/validation": "npm:0.6.3"
-  checksum: 10c0/7936b87a2bc768e298ddd839775ed94247756318d7a8c8c2568245bb1331c320af1dd6cbfdbe6fad3cf5158856dfe21ad1d20365dd609b67b66c9a8024638aae
+    "@scalar/helpers": "npm:0.16.4"
+    "@scalar/schemas": "npm:0.14.0"
+    "@scalar/types": "npm:0.24.0"
+    "@scalar/validation": "npm:0.6.7"
+  checksum: 10c0/8f00854b28b9d92aefd63ff341247ac8a8c97c73d683c31f928baf7b44ee6adba18bfd92176167dd66edde93b077fe87edd2f0a16e3f5e6051d11496a70a8708
   languageName: node
   linkType: hard
 
 "@scalar/express-api-reference@npm:^0.10.17":
-  version: 0.10.17
-  resolution: "@scalar/express-api-reference@npm:0.10.17"
+  version: 0.10.30
+  resolution: "@scalar/express-api-reference@npm:0.10.30"
   dependencies:
-    "@scalar/client-side-rendering": "npm:0.3.10"
-  checksum: 10c0/fd5b4c0ffcd198b021a6e8feb3d3d8267c6298fdc98e3c7d4cb57ec5cf7727fcbf6a619e57ef1010f76380c494699c75a2178d52aa9f7ac310360eafc956ee85
+    "@scalar/client-side-rendering": "npm:0.4.12"
+  checksum: 10c0/1ca0f754313fffafd4a79289b1e5229af100ac687d362415d112d9581e82554bf3fbf96acb5b99f3441970bd2224edc3319fe9122bb2e07d8be0539cfba14b58
   languageName: node
   linkType: hard
 
-"@scalar/helpers@npm:0.11.2":
-  version: 0.11.2
-  resolution: "@scalar/helpers@npm:0.11.2"
-  checksum: 10c0/5c52e4f400111b74ec531edf69ffb846a58e7c4fb95fbb38295a9568f54b48470bc28aecca1439d1296b634334d5947a80aa96c248453e3e7941b00c3d86bf0a
+"@scalar/helpers@npm:0.16.4":
+  version: 0.16.4
+  resolution: "@scalar/helpers@npm:0.16.4"
+  checksum: 10c0/5347ace1a7451b2145a37087419efa201c756427aa5b902b2b92647bf99c8ecf511a1ca36e269ef8a26573966e251e276b370395f728f7cff2b24dea93463843
   languageName: node
   linkType: hard
 
-"@scalar/schemas@npm:0.8.4":
-  version: 0.8.4
-  resolution: "@scalar/schemas@npm:0.8.4"
+"@scalar/schemas@npm:0.14.0":
+  version: 0.14.0
+  resolution: "@scalar/schemas@npm:0.14.0"
   dependencies:
-    "@scalar/helpers": "npm:0.11.2"
-    "@scalar/validation": "npm:0.6.3"
-  checksum: 10c0/4548726d238c09b6a2c55972673b1d3671e054fc6b57e378efb04b3ef86ed05ce1eb4dd8520072e976b6d79d3fb00f9006a809f0123efe33cc1b9d975c2c83ac
+    "@scalar/helpers": "npm:0.16.4"
+    "@scalar/validation": "npm:0.6.7"
+  checksum: 10c0/9ecd9a6eb1aae9d49c4df60da98fa2d285abfbb23809c0925976f5e376b713909c96486e8e7ae123e292e094c113f40136b77cf27823483b03fdbda720101849
   languageName: node
   linkType: hard
 
-"@scalar/types@npm:0.18.3":
-  version: 0.18.3
-  resolution: "@scalar/types@npm:0.18.3"
+"@scalar/types@npm:0.24.0":
+  version: 0.24.0
+  resolution: "@scalar/types@npm:0.24.0"
   dependencies:
-    "@scalar/helpers": "npm:0.11.2"
+    "@scalar/helpers": "npm:0.16.4"
     nanoid: "npm:^5.1.6"
     type-fest: "npm:^5.8.0"
     zod: "npm:^4.4.3"
-  checksum: 10c0/6c7d1e714acf63645367a9fee159166c76f15354b379e4f05ec89a2155da96e7de0bdf2ea36416ca3638016e4484bb9beb46e0077a449ee82f5b0152bf0f53d7
+  checksum: 10c0/1d2f68137b840d1613cb2574e021af0acb3c41dfa42e8c6b827b4489eee88945b6f098b18bfcef8e2f1a42d2bf939fc818d15e787dcecd6d6e5382dff8443116
   languageName: node
   linkType: hard
 
-"@scalar/validation@npm:0.6.3":
-  version: 0.6.3
-  resolution: "@scalar/validation@npm:0.6.3"
-  checksum: 10c0/3c510769ff50beeeebc2b4fce1bc9de726dbe89ab5a78525a4eec5209353f534b34a075dee3c86e2238e5068ca5aac8260d110f9496b5b3ad863695ab633855a
+"@scalar/validation@npm:0.6.7":
+  version: 0.6.7
+  resolution: "@scalar/validation@npm:0.6.7"
+  checksum: 10c0/2dec55865ace25b779e6f0a0eaadfdb72d7645c94b8ea5a948081ba9724e95421a094541cba193f66f014c1293257b4296cafb736df977553a63219ead4dd2e2
   languageName: node
   linkType: hard
 
@@ -1422,8 +1423,8 @@ __metadata:
   linkType: hard
 
 "pino@npm:^10.3.1":
-  version: 10.3.1
-  resolution: "pino@npm:10.3.1"
+  version: 10.4.0
+  resolution: "pino@npm:10.4.0"
   dependencies:
     "@pinojs/redact": "npm:^0.4.0"
     atomic-sleep: "npm:^1.0.0"
@@ -1432,13 +1433,13 @@ __metadata:
     pino-std-serializers: "npm:^7.0.0"
     process-warning: "npm:^5.0.0"
     quick-format-unescaped: "npm:^4.0.3"
-    real-require: "npm:^0.2.0"
+    real-require: "npm:^1.0.0"
     safe-stable-stringify: "npm:^2.3.1"
     sonic-boom: "npm:^4.0.1"
     thread-stream: "npm:^4.0.0"
   bin:
     pino: bin.js
-  checksum: 10c0/ae1c57f2baac85dd5d63a3500746d5ea1cfc4bfcbf356eaec94d42a782eeb80caa4d4614de43a036cf48e2aed46d855a7ff21b126f55a63811def52a894ef937
+  checksum: 10c0/225cb0e450c13ecdc8cd33617f69ebc62d0ae72b4cc4ec3387e58895c623461e6502772cab9afc675a9ec798a4ff9077efba17b70fdc458f11d9404a1eaf090c
   languageName: node
   linkType: hard
 
@@ -1516,6 +1517,13 @@ __metadata:
   version: 0.2.0
   resolution: "real-require@npm:0.2.0"
   checksum: 10c0/23eea5623642f0477412ef8b91acd3969015a1501ed34992ada0e3af521d3c865bb2fe4cdbfec5fe4b505f6d1ef6a03e5c3652520837a8c3b53decff7e74b6a0
+  languageName: node
+  linkType: hard
+
+"real-require@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "real-require@npm:1.0.0"
+  checksum: 10c0/74d44b360b8b662d29c646f4688da462c4b10243b11d22ff9635395e81951a9c1ed349393411c4911ca6f3474c3e10e812bf4767052706abb863ba59bde0813b
   languageName: node
   linkType: hard
 
