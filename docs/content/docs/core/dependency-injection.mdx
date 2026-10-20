@@ -28,7 +28,8 @@ Marks a class as resolvable by the container.
 
 ```ts
 interface InjectableOptions {
-  /** Default: true. When false, a new instance is created on every resolution. */
+  /** Default: true. When false, a new instance is created on every resolution
+   * (controllers are resolved once at bootstrap; there is no request scope). */
   singleton?: boolean
 }
 ```
@@ -37,8 +38,8 @@ interface InjectableOptions {
 @Injectable()                       // singleton (default)
 class CacheService {}
 
-@Injectable({ singleton: false })   // new instance each time
-class RequestScoped {}
+@Injectable({ singleton: false })   // new instance per resolution
+class Transient {}
 ```
 
 ## `@Inject(token)`
@@ -59,6 +60,10 @@ class OrdersService {
 
 <Callout title="Constructor only">
   `@Inject` is constructor-parameter-only. Property and method injection are not supported.
+</Callout>
+
+<Callout title="No request scope">
+`{ singleton: false }` creates a new instance **per resolution**. Controllers are resolved once at bootstrap, so a non-singleton dependency of a controller is created once, not once per request. There is no request scope.
 </Callout>
 
 ## Resolution rules

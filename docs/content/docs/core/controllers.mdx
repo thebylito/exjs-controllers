@@ -88,7 +88,7 @@ class OrdersController {
 
 | Property         | Type                  | Description                                                                                          |
 | ---------------- | --------------------- | ---------------------------------------------------------------------------------------------------- |
-| `inputClass`     | `typeof BaseSchema`   | DTO class used to document the request body (`requestBody.content['application/json'].schema`).      |
+| `inputClass`     | `typeof BaseSchema`   | DTO class used to **document** the request body (`requestBody.content['application/json'].schema`); it does not validate. Validate through `@Body(Dto)` + `validate()`. |
 | `outputClass`    | `typeof BaseSchema`   | DTO class used to document the `200` response body.                                                  |
 | `outputIsArray`  | `boolean`             | When `true`, the OpenAPI response schema is `{ type: 'array', items: <outputClass> }`.               |
 | `summary`        | `string`              | Short, single-line description shown in the OpenAPI docs / Scalar UI.                                |

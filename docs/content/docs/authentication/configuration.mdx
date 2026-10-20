@@ -107,7 +107,13 @@ Two error classes are exported from `exjs-controllers/core/authentication`:
 | `UnauthorizedError`    | `401`  | `currentUserChecker` throws, or returns `null`/`undefined` on a route that requires auth. |
 | `ForbiddenError`       | `403`  | Principal kind is not allowed, or `authorizationChecker` returns `false`.                 |
 
-Catch them in your global `errorHandler` to turn them into HTTP responses:
+An exception thrown by `currentUserChecker` is answered `401` with the fixed message `Unauthorized`; the original error stays in `cause` and never reaches the client. `{ principal: null }` counts as unauthenticated. A route with a non-optional `@CurrentUser()` / `@CurrentApiKey()` rejects anonymous requests with `401` before multer parses the body, and applying `@Authorized` twice to the same method throws when the class is defined.
+
+<Callout title="Renamed option">
+For direct users of `createAuthenticationMiddleware`, the option `hasAuthorizedDecorator` was renamed `requirePrincipal`.
+</Callout>
+
+If you omit `errorHandler`, the default error handler already answers these errors (see [configureApplication](/docs/configuration/configure-application)). Catch them in your global `errorHandler` to turn them into HTTP responses:
 
 ```ts
 import {

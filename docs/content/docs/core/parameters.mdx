@@ -17,6 +17,8 @@ findOne(
 }
 ```
 
+`@HeaderParam` names must be lower-case, because Node lower-cases incoming header names. `@QueryParam` receives a `string[]` when the key is repeated (`?tag=a&tag=b`).
+
 When **no** parameter decorator is present, the framework falls back to passing the raw `Request` as the single argument.
 
 ## Reference
@@ -130,6 +132,22 @@ uploadLarge(
   /* ... */
 }
 ```
+
+Every upload route gets default multer limits (exported as `DEFAULT_UPLOAD_LIMITS`). `options.limits` overrides them key by key; `files` counts per request, not per field.
+
+| Limit | Default |
+|---|---|
+| `fileSize` | 16 MiB |
+| `files` | 10 (per request, not per field) |
+| `fields` | 100 |
+| `parts` | 200 |
+| `fieldNameSize` | 100 bytes |
+| `fieldSize` | 1 MiB |
+| `headerPairs` | 2000 |
+| `fieldNestingDepth` | 5 |
+| `fieldArrayIndexLimit` | 100 |
+
+Limit errors are answered by the default error handler: `413` for `LIMIT_FILE_SIZE`, `400` for the other multer errors. With `diskStorage`, files already written are deleted when the handler throws. A route with a non-optional `@CurrentUser()` / `@CurrentApiKey()` rejects anonymous requests with `401` before multer parses the body.
 
 Use `@UploadedFiles('field')` to bind an array of files from the same field. One upload param is supported per route.
 

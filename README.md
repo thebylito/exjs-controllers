@@ -115,7 +115,7 @@ All route decorators accept a path and an optional `RouteOptions` object.
 
 | Property | Type | Description |
 |---|---|---|
-| `inputClass` | `typeof BaseSchema` | DTO class used to validate and document the request body |
+| `inputClass` | `typeof BaseSchema` | DTO class used to **document** the request body in OpenAPI (validation happens through `@Body(Dto)` + `validate()`) |
 | `outputClass` | `typeof BaseSchema` | DTO class used to document the response body |
 | `outputIsArray` | `boolean` | When `true`, the OpenAPI response schema is wrapped as `{ type: 'array', items: <outputClass schema> }` |
 | `summary` | `string` | Short description shown in the OpenAPI docs |
@@ -141,11 +141,11 @@ Use these decorators on method parameters to bind request data automatically.
 
 | Decorator | Binds |
 |---|---|
-| `@Body(schemaClass?)` | `req.body` — optionally hydrates into an instance of `schemaClass` |
+| `@Body(schemaClass?)` | `req.body` — optionally hydrates into an instance of `schemaClass`, copying only the keys declared with `@Field` |
 | `@Param(name)` | `req.params[name]` |
-| `@QueryParam(name)` | `req.query[name]` |
+| `@QueryParam(name)` | `req.query[name]` — a `string[]` when the key is repeated (`?tag=a&tag=b`) |
 | `@QueryParams()` | `req.query` (entire object) |
-| `@HeaderParam(name)` | `req.headers[name]` |
+| `@HeaderParam(name)` | `req.headers[name]` — the name must be lower-case (Node lower-cases incoming headers) |
 | `@Req()` | The raw Express `Request` object |
 | `@Res()` | The raw Express `Response` object |
 | `@CurrentUser(options?)` | The resolved `user` principal — responds `401` when missing unless `{ optional: true }` |
@@ -196,6 +196,26 @@ class ImportsController {
 }
 ```
 
+Every upload route gets default multer limits (exported as `DEFAULT_UPLOAD_LIMITS`); `options.limits` overrides them key by key:
+
+| Limit | Default |
+|---|---|
+| `fileSize` | 16 MiB |
+| `files` | 10 (per request, not per field) |
+| `fields` | 100 |
+| `parts` | 200 |
+| `fieldNameSize` | 100 bytes |
+| `fieldSize` | 1 MiB |
+| `headerPairs` | 2000 |
+| `fieldNestingDepth` | 5 |
+| `fieldArrayIndexLimit` | 100 |
+
+```ts
+@UploadedFile('file', { options: { limits: { fileSize: 2 * 1024 * 1024 } } }) // other limits keep the defaults
+```
+
+Limit errors are answered by the default error handler: `413` for `LIMIT_FILE_SIZE`, `400` for the other multer errors. With `diskStorage`, files already written are deleted when the handler throws. A route with a non-optional `@CurrentUser()` / `@CurrentApiKey()` rejects anonymous requests with `401` before multer parses the body.
+
 `UploadedFileInfo` is a self-contained type (mirrors `Express.Multer.File`) re-exported from `exjs-controllers/decorators/Params` — no need to install `@types/multer` in the consumer.
 
 ---
@@ -235,6 +255,8 @@ class CreateAssetInput extends AuditedInput {
 // classToZod(CreateAssetInput) includes both createdBy and assetTag
 ```
 
+**Hydration** — `@Body(Dto)` copies only the keys declared with `@Field`; undeclared client keys are dropped, and `__proto__`, `constructor` and `prototype` are always ignored. A DTO with no `@Field` keeps all other own keys. `validate()` writes the Zod parse result back onto the instance, so transforms, `.default()` and `z.coerce` take effect (keys added via `merge()` are preserved).
+
 ### Useful methods
 
 ```ts
@@ -257,7 +279,7 @@ const schema = CreateUserInput.toZod()
 
 ### `@Injectable(options?)`
 
-Marks a class as injectable. By default creates a singleton — set `{ singleton: false }` to create a new instance on every injection.
+Marks a class as injectable. By default creates a singleton — set `{ singleton: false }` to create a new instance **per resolution** (controllers are resolved once at bootstrap, so a non-singleton dependency of a controller is also created once). There is no request scope.
 
 ```ts
 import { Injectable } from 'exjs-controllers/decorators/DependencyInjection'
@@ -361,6 +383,11 @@ maybeMe(@CurrentUser({ optional: true }) user?: AuthenticatedUser) {
 ### Errors
 
 `UnauthorizedError` (`401`) and `ForbiddenError` (`403`) are exported from `exjs-controllers/core/authentication`. Handle them in your `errorHandler` to shape the HTTP response.
+
+- An exception thrown by `currentUserChecker` is answered `401` with the fixed message `Unauthorized` (the original error stays in `cause`).
+- `{ principal: null }` counts as unauthenticated.
+- Applying `@Authorized` twice to the same method throws when the class is defined.
+- Direct users of `createAuthenticationMiddleware`: the option `hasAuthorizedDecorator` was renamed `requirePrincipal`.
 
 Full reference: [Authentication](https://thebylito.github.io/exjs-controllers/docs/authentication/configuration/) and [`@Authorized` & principals](https://thebylito.github.io/exjs-controllers/docs/authentication/authorized/).
 
@@ -511,16 +538,16 @@ Requires an OpenTelemetry SDK to be initialised in the application before spans 
 | Option | Type | Description |
 |---|---|---|
 | `controllers` | `ControllerClass[]` | Controller classes to register |
-| `controllerDiscovery` | `ControllerDiscoveryOptions` | Discover controllers from directories when `controllers` is omitted |
+| `controllerDiscovery` | `ControllerDiscoveryOptions` | Discover controllers from directories when `controllers` is omitted; `directories` mounts every `*.controller.*` file recursively, so keep test fixtures out of them |
 | `authentication` | `AuthenticationConfig` | Principal resolution and permission checks for protected routes |
-| `logger` | `HttpLoggerOptions \| false` | Pino HTTP logger, mounted when provided |
-| `middlewares` | `MiddlewareRegistration[]` | Express middlewares applied before controllers |
-| `errorHandler` | `ErrorMiddleware` | Express error middleware, mounted last |
+| `logger` | `HttpLoggerOptions \| false` | Pino HTTP logger, mounted when provided. Besides `logger`, `logFormat`, `levelFormat`, etc., it accepts `remoteIpHeaders?: string[]` (default `[]`: no client IP header such as `CF-Connecting-IP` is trusted unless listed) and `logQueryString?: boolean` (default `false`: query string and fragment are stripped from `requestUrl` and `referrer`) |
+| `middlewares` | `MiddlewareRegistration[]` | Express middlewares applied before controllers and before the docs routes. `/docs` and the OpenAPI JSON are public by default; protect them with `{ path: '/docs', handlers: [requireAdmin] }` |
+| `errorHandler` | `ErrorMiddleware` | Express error middleware, mounted last. When omitted, `createDefaultErrorHandler()` is mounted: JSON `{ error, message, issues? }`, 5xx always `Internal Server Error`, 4xx echo `error.message`, `MulterError` becomes 413/400 and `UseCaseInputValidationError` becomes 422 with `issues`. A handler declared with fewer than 4 parameters throws at bootstrap |
 | `openapi.documentation` | `OpenApiDocumentationOptions` | OpenAPI document metadata |
 | `openapi.documentPath` | `string` | Path to serve the JSON document (default: `/docs/openapi.json`) |
 | `openapi.documents` | `Record<string, OpenApiDocumentOptions>` | One OpenAPI document (and Scalar UI) per group |
 | `enableScalar` | `boolean` | Mount the Scalar UI |
-| `scalar` | `ScalarConfigurationOptions` | Scalar runtime options; `scalar.referencePath` sets the UI path (default: `/docs`) |
+| `scalar` | `ScalarConfigurationOptions` | Scalar runtime options; `scalar.referencePath` sets the UI path (default: `/docs`). Everything under `scalar` is embedded in the public HTML, so never put real credentials there. The `Host` header is validated before it becomes the server URL; set `scalar.servers` to pin it |
 
 ---
 

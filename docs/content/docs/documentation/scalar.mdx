@@ -49,7 +49,7 @@ await configureApplication(app, {
 })
 ```
 
-When `scalar.servers` is omitted, the framework injects a single entry pointing at the request origin (`<protocol>://<host>`).
+When `scalar.servers` is omitted, the framework injects a single entry pointing at the request origin (`<protocol>://<host>`). The `Host` header is validated before it is used, and a malformed one is ignored. Set `scalar.servers` explicitly to pin the URL.
 
 ## Authentication
 
@@ -66,12 +66,16 @@ scalar: {
     preferredSecurityScheme: 'bearerAuth',
     securitySchemes: {
       bearerAuth: {
-        token: process.env.DEMO_TOKEN
+        token: '<paste-your-token>'
       }
     }
   }
 }
 ```
+
+<Callout type="warn" title="Everything under scalar is public">
+Everything under `scalar` is embedded in the public `/docs` HTML, including `authentication.securitySchemes.*.token`, `password`, `username` and `value`, and the source of `onBeforeRequest`. Use placeholders, never real credentials.
+</Callout>
 
 ## Hooking into requests
 

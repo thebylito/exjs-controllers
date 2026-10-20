@@ -32,6 +32,8 @@ interface HttpLoggerOptions {
   levelFormat?: 'label' | 'number'      // default: 'number'
   stream?: LogStream                    // custom destination
   filePath?: string                     // also append every line to a file
+  remoteIpHeaders?: string[]            // default: []
+  logQueryString?: boolean              // default: false
 }
 ```
 
@@ -53,6 +55,14 @@ logger: { levelFormat: 'label' } // → "level":"info"
 
 This only changes JSON output; the `pretty` formatter always prints the
 uppercased label regardless.
+
+### Client IP and query strings
+
+`remoteIpHeaders` lists lower-case headers that a trusted edge proxy fills with the client IP (for example `cf-connecting-ip`); the first one present wins. The default is `[]`, so `CF-Connecting-IP` and `True-Client-IP` are no longer trusted unless you list them. Any client can forge these headers, so only set them if your edge overwrites them.
+
+`logQueryString` defaults to `false`: the query string and fragment are stripped from `requestUrl` (taken from `originalUrl`) and `referrer`, because they can carry tokens and personal data. Set it to `true` to keep them.
+
+Without a `Content-Length` header, `requestSize` is the number of socket bytes read for the request (headers included). A failure while writing the access log is logged as a warning instead of crashing the process.
 
 ### Pretty output (development)
 
@@ -93,8 +103,8 @@ await configureApplication(app, {
 
 For every request the middleware:
 
-1. Reads the correlation ID from the first available header: the configured `correlationIdHeaderName`, `x-request-id`, then `x-transaction-id`.
-2. Generates a new one (`randomUUID`) if none is present.
+1. Reads the correlation ID from the first available header: the configured `correlationIdHeaderName`, `x-request-id`, then `x-transaction-id`. An incoming id must match `/^[A-Za-z0-9._:-]{1,128}$/`, otherwise a new one is generated.
+2. Generates a new one (`randomUUID`) if none is present or valid.
 3. Sets `x-correlation-id` on the response so downstream callers can echo it back.
 4. Creates a Pino child logger bound to `{ correlationId }` and stores it in `AsyncLocalStorage`.
 
