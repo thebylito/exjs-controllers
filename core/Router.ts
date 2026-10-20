@@ -26,12 +26,31 @@ import {
   legacyParamMap,
   type ParamMetadata,
 } from '#exjs-controllers/metadata/legacyStorage'
+import { classToZodOrUndefined } from '#exjs-controllers/core/ClassToZod'
 import { resolveDependency } from '#exjs-controllers/core/DependencyContainer'
 import { runWithControllerSpan } from '#exjs-controllers/observability/tracing'
 
 export type ControllerClass = new (...args: any[]) => object
 
 const registeredRoutes = new Set<string>()
+
+// Chaves que nunca podem ser copiadas do body para o DTO (prototype pollution
+// e sombreamento do protótipo da instância).
+const FORBIDDEN_BODY_KEYS: ReadonlySet<string> = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+])
+
+// Chaves declaradas via @Field (inclui herdadas). `null` quando a classe não
+// declara nenhum campo — nesse caso só as chaves proibidas são filtradas.
+function resolveDeclaredKeys(
+  schemaClass: (new (...args: any[]) => object) | undefined,
+): ReadonlySet<string> | null {
+  if (!schemaClass) return null
+  const schema = classToZodOrUndefined(schemaClass)
+  return schema ? new Set(Object.keys(schema.shape)) : null
+}
 
 export function _resetRoutesForTests(): void {
   registeredRoutes.clear()
@@ -119,6 +138,12 @@ function registerRoute(
     route.handlerName
   ] as (...args: unknown[]) => unknown
 
+  const declaredKeys = new Map(
+    handlerParams
+      .filter((p) => p.type === 'body')
+      .map((p) => [p.index, resolveDeclaredKeys(p.schemaClass)] as const),
+  )
+
   const authenticationHandler = resolveAuthenticationHandler(
     instance,
     route.handlerName,
@@ -143,7 +168,7 @@ function registerRoute(
     const ctx = ensureHttpContext(request, response)
 
     try {
-      const args = resolveArgs(ctx.request, ctx.response, handlerParams)
+      const args = resolveArgs(ctx.request, ctx.response, handlerParams, declaredKeys)
       const result = await runWithControllerSpan(
         {
           controllerName,
@@ -251,6 +276,7 @@ function resolveArgs(
   },
   response: unknown,
   params: ParamMetadata[],
+  declaredKeys: ReadonlyMap<number, ReadonlySet<string> | null>,
 ): unknown[] {
   if (params.length === 0) return [request]
 
@@ -259,7 +285,7 @@ function resolveArgs(
   for (const p of params) {
     switch (p.type) {
       case 'body':
-        args[p.index] = hydrateBodyArg(request.body, p)
+        args[p.index] = hydrateBodyArg(request.body, p, declaredKeys.get(p.index) ?? null)
         break
       case 'param':
         args[p.index] = getFirstValue(request.params[p.name!])
@@ -321,7 +347,11 @@ function getFirstValue(value: string | string[] | undefined): string | undefined
   return Array.isArray(value) ? value[0] : value
 }
 
-function hydrateBodyArg(body: unknown, param: ParamMetadata): unknown {
+function hydrateBodyArg(
+  body: unknown,
+  param: ParamMetadata,
+  declaredKeys: ReadonlySet<string> | null,
+): unknown {
   if (!param.schemaClass) {
     return body
   }
@@ -340,7 +370,17 @@ function hydrateBodyArg(body: unknown, param: ParamMetadata): unknown {
     return new SchemaClass()
   }
 
-  return Object.assign(new SchemaClass(), body)
+  // Copia só chaves próprias e declaradas, por atribuição simples: nunca
+  // Object.assign com o body cru (mass assignment / troca de protótipo).
+  const instance = new SchemaClass() as Record<string, unknown>
+  const source = body as Record<string, unknown>
+  for (const key of Object.keys(source)) {
+    if (FORBIDDEN_BODY_KEYS.has(key)) continue
+    if (declaredKeys !== null && !declaredKeys.has(key)) continue
+    instance[key] = source[key]
+  }
+
+  return instance
 }
 
 function normalizePath(prefix: string, routePath: string): string {

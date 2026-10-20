@@ -18,6 +18,28 @@ class CreateItemInput extends BaseSchema {
   name!: string
 }
 
+class SignupInput extends BaseSchema {
+  @Field(z.string().min(1))
+  name!: string
+
+  @Field(z.string().email())
+  email!: string
+}
+
+class ParentInput extends BaseSchema {
+  @Field(z.string())
+  name!: string
+}
+
+class ChildInput extends ParentInput {
+  @Field(z.string())
+  nick!: string
+}
+
+class UndeclaredInput extends BaseSchema {}
+
+let captured: unknown
+
 @Injectable()
 @DefineUseCase()
 class CreateItem implements UseCase<CreateItemInput, { name: string }> {
@@ -38,6 +60,24 @@ class ItemsController {
   @Post('/')
   create(@Body(CreateItemInput) input: CreateItemInput) {
     return this.createItem.execute(input)
+  }
+
+  @Post('/signup')
+  signup(@Body(SignupInput) input: SignupInput) {
+    captured = input
+    return this.createItem.execute(input as unknown as CreateItemInput)
+  }
+
+  @Post('/child')
+  child(@Body(ChildInput) input: ChildInput) {
+    captured = input
+    return {}
+  }
+
+  @Post('/undeclared')
+  undeclared(@Body(UndeclaredInput) input: UndeclaredInput) {
+    captured = input
+    return {}
   }
 
   @Post('/raw')
@@ -75,6 +115,15 @@ afterEach(async () => {
   app = undefined
   await new Promise<void>((resolve) => current.close(() => resolve()))
 })
+
+async function postRaw(path: string, raw: string): Promise<{ status: number; body: any }> {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: raw,
+  })
+  return { status: response.status, body: await response.json() }
+}
 
 async function post(path: string, body?: unknown): Promise<{ status: number; body: any }> {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -116,5 +165,51 @@ describe('@Body(Dto) hydration', () => {
   it('leaves @Body() without a class untouched', async () => {
     expect(await post('/items/raw')).toEqual({ status: 200, body: { received: null } })
     expect(await post('/items/raw', { a: 1 })).toEqual({ status: 200, body: { received: { a: 1 } } })
+  })
+
+  it('drops undeclared keys before the handler', async () => {
+    captured = undefined
+    await post('/items/signup', { name: 'x', email: 'a@b.com', isAdmin: true, role: 'admin' })
+
+    expect(Object.keys(captured as object)).toEqual(['name', 'email'])
+    expect((captured as any).isAdmin).toBeUndefined()
+  })
+
+  it('keeps keys declared on a parent DTO', async () => {
+    captured = undefined
+    await post('/items/child', { name: 'n', nick: 'k', extra: 1 })
+
+    expect(Object.keys(captured as object).sort()).toEqual(['name', 'nick'])
+  })
+
+  it('ignores __proto__: instance keeps its prototype and the use case answers 422', async () => {
+    captured = undefined
+    const { status } = await postRaw('/items/signup', '{"__proto__":{"isAdmin":true},"name":""}')
+
+    expect(status).toBe(422)
+    expect(captured).toBeInstanceOf(SignupInput)
+    expect(Object.getPrototypeOf(captured)).toBe(SignupInput.prototype)
+    expect((captured as any).isAdmin).toBeUndefined()
+  })
+
+  it('a "validate" or "constructor" key does not shadow the method', async () => {
+    const ok = await post('/items/signup', {
+      name: 'x',
+      email: 'a@b.com',
+      validate: 'pwned',
+      constructor: 'x',
+    })
+    expect(ok.status).toBe(200)
+
+    const bad = await post('/items/signup', { name: '', email: 'a@b.com', validate: 'pwned' })
+    expect(bad.status).toBe(422)
+  })
+
+  it('copies own keys except forbidden ones when the DTO declares no @Field', async () => {
+    captured = undefined
+    await postRaw('/items/undeclared', '{"__proto__":{"x":1},"constructor":"c","prototype":"p","a":1}')
+
+    expect(Object.keys(captured as object)).toEqual(['a'])
+    expect(Object.getPrototypeOf(captured)).toBe(UndeclaredInput.prototype)
   })
 })
