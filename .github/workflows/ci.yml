@@ -29,7 +29,7 @@ jobs:
       # Corepack reads `packageManager` from package.json and pins the Yarn
       # version. Must run before setup-node so `cache: yarn` sees Yarn 4.
       - name: Enable Corepack
-        run: npm install -g corepack@latest && corepack enable
+        run: npm install -g corepack@0.36.0 && corepack enable
 
       - uses: actions/setup-node@v7
         with:
@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Enable Corepack
-        run: npm install -g corepack@latest && corepack enable
+        run: npm install -g corepack@0.36.0 && corepack enable
 
       - uses: actions/setup-node@v7
         with:

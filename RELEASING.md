@@ -164,10 +164,29 @@ Done once per package; lets the workflow publish without any token.
    - Organization or user: `thebylito`
    - Repository: `exjs-controllers`
    - Workflow filename: `release.yml`
-   - Environment name: leave blank
+   - Environment name: `npm`
 3. Save. The first tagged release confirms it works.
 4. Optional, after that first release: in the package's publishing access settings
    choose the option that disallows tokens, so only the workflow can publish.
+
+### One-time setup: GitHub `npm` environment
+
+The `publish` job runs in a GitHub environment named `npm`, which must match the
+Trusted Publisher environment name above.
+
+1. In the repository go to **Settings** → **Environments** → **New environment** and name it `npm`.
+2. Add the maintainer as a **Required reviewer**.
+3. Optional: under deployment branches and tags, allow only `v*` tags.
+
+After a tag is pushed, `build` runs the tests and packs the tarball with
+read-only permissions. The `publish` job then waits for the reviewer's approval
+before it can use OIDC, publish to npm and create the GitHub Release.
+
+### Pinned corepack
+
+All workflows install `corepack@0.36.0` instead of `latest`, so a new corepack
+release cannot change the build unnoticed. To bump it, change the version in
+`.github/workflows/ci.yml`, `docs.yml` and `release.yml` together.
 
 ---
 
