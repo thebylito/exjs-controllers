@@ -350,9 +350,9 @@ function resolveScalarConfigurationForRequest(
     return scalarConfiguration
   }
 
-  const host = request.get('host')
+  const origin = resolveRequestOrigin(request)
 
-  if (!host) {
+  if (!origin) {
     return scalarConfiguration ?? {}
   }
 
@@ -360,20 +360,31 @@ function resolveScalarConfigurationForRequest(
     ...(scalarConfiguration ?? {}),
     servers: [
       {
-        url: getRequestOrigin(request),
+        url: origin,
       },
     ],
   }
 }
 
-function getRequestOrigin(
+// Host é controlado pelo cliente e a configuração do Scalar vai inline num <script>:
+// só aceitamos hostname/IPv6 com porta opcional.
+const HOST_HEADER_PATTERN =
+  /^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)(:\d{1,5})?$/
+
+function resolveRequestOrigin(
   request: Parameters<Application['get']>[1] extends (
     ...args: infer TArgs
   ) => unknown
     ? TArgs[0]
     : never,
-): string {
-  return `${request.protocol}://${request.get('host')}`
+): string | undefined {
+  const host = request.get('host')
+
+  if (!host || !HOST_HEADER_PATTERN.test(host)) {
+    return undefined
+  }
+
+  return `${request.protocol}://${host}`
 }
 
 async function resolveControllers(

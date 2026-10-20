@@ -1,3 +1,5 @@
+import { request as httpRequest } from 'node:http'
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -55,6 +57,27 @@ async function start(
   }
 
   return `http://127.0.0.1:${address.port}`
+}
+
+function getWithHost(
+  base: string,
+  path: string,
+  host: string,
+): Promise<{ status: number; body: string }> {
+  const url = new URL(path, base)
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      { hostname: url.hostname, port: url.port, path: url.pathname, headers: { Host: host } },
+      (res) => {
+        let body = ''
+        res.setEncoding('utf8')
+        res.on('data', (chunk) => (body += chunk))
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, body }))
+      },
+    )
+    req.on('error', reject)
+    req.end()
+  })
 }
 
 async function getJson(url: string): Promise<{ status: number; body: any }> {
@@ -165,6 +188,21 @@ describe('configureApplication — documentos OpenAPI', () => {
 
     expect(body).toContain(`src="${cdn}"`)
     expect(body).not.toContain(DEFAULT_SCALAR_CDN)
+  })
+
+  it('não reflete um Host inválido na página do Scalar', async () => {
+    const base = await start({ openapi: { documentation }, enableScalar: true })
+    const res = await getWithHost(base, '/docs', '</script><script>alert(1)</script>')
+
+    expect(res.status).toBe(200)
+    expect(res.body).not.toContain('</script><script>alert')
+  })
+
+  it('mantém servers[0].url com Host válido', async () => {
+    const base = await start({ openapi: { documentation }, enableScalar: true })
+    const body = await (await fetch(`${base}/docs`)).text()
+
+    expect(body).toContain(`"url": "${base}"`)
   })
 
   it('caminho de documento repetido falha no bootstrap', async () => {
