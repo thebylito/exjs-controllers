@@ -1,3 +1,5 @@
+import { unlink } from 'node:fs/promises'
+
 import multer, { type Options as MulterOptions } from 'multer'
 
 import {
@@ -186,6 +188,10 @@ function registerRoute(
 
       writeControllerResult(ctx.response, result)
     } catch (error) {
+      // O handler falhou: os arquivos gravados pelo diskStorage ficariam órfãos.
+      if (uploadHandler) {
+        await removeUploadedFiles(request)
+      }
       next(error)
     }
   }
@@ -193,6 +199,32 @@ function registerRoute(
   routeHandlers.push(routeHandler)
 
   app.register(route.method, fullPath, ...routeHandlers)
+}
+
+// Remove do disco os arquivos que o multer (diskStorage) gravou para a request.
+// Sem `path` (memoryStorage) não há o que apagar. Nunca lança.
+async function removeUploadedFiles(request: { file?: unknown; files?: unknown }): Promise<void> {
+  const candidates: unknown[] = [request.file]
+  const files = request.files
+  if (Array.isArray(files)) {
+    candidates.push(...files)
+  } else if (files && typeof files === 'object') {
+    for (const group of Object.values(files)) {
+      if (Array.isArray(group)) {
+        candidates.push(...group)
+      }
+    }
+  }
+
+  const paths: string[] = []
+  for (const candidate of candidates) {
+    const path = (candidate as { path?: unknown } | null | undefined)?.path
+    if (typeof path === 'string') {
+      paths.push(path)
+    }
+  }
+
+  await Promise.allSettled(paths.map((path) => unlink(path)))
 }
 
 function writeControllerResult(

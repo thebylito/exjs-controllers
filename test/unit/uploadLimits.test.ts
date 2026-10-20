@@ -1,3 +1,7 @@
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { configureApplication } from '#exjs-controllers/config/configureApplication'
@@ -242,5 +246,77 @@ describe('upload — autenticação antes do multer', () => {
     } finally {
       await new Promise<void>((resolve) => secureApp.close(() => resolve()))
     }
+  })
+})
+
+describe('diskStorage cleanup', () => {
+  let dir = ''
+  let diskApp: Application | undefined
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'exjs-upload-'))
+  })
+
+  afterEach(async () => {
+    if (diskApp) {
+      const current = diskApp
+      diskApp = undefined
+      await new Promise<void>((resolve) => current.close(() => resolve()))
+    }
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  async function startDiskApp(fail: boolean): Promise<string> {
+    _resetRoutesForTests()
+    const dest = dir
+
+    @Controller('/disk')
+    class DiskController {
+      @Post('/one')
+      one(@UploadedFile('file', { options: { dest } }) _file: unknown) {
+        if (fail) throw new Error('boom')
+        return { ok: true }
+      }
+    }
+
+    diskApp = createApplication()
+    await configureApplication(diskApp, {
+      controllers: [DiskController],
+      logger: false,
+      errorHandler: (error: any, _request, response, _next) => {
+        response.status(error.statusCode ?? error.status ?? 500).json({ code: error.name })
+      },
+    })
+    const started = diskApp
+    await new Promise<void>((resolve) => started.listen(0, resolve))
+    const address = started.address()
+    if (!address || typeof address === 'string') throw new Error('Servidor de teste sem porta TCP')
+    return `http://127.0.0.1:${address.port}`
+  }
+
+  async function upload(url: string): Promise<number> {
+    const body = Buffer.concat([
+      filePart('file', Buffer.from('conteudo')),
+      Buffer.from(`--${BOUNDARY}--\r\n`),
+    ])
+    const res = await fetch(`${url}/disk/one`, {
+      method: 'POST',
+      headers: { connection: 'close', 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
+      body,
+    })
+    await res.text()
+    return res.status
+  }
+
+  it('remove os arquivos gravados pelo diskStorage quando o handler lança', async () => {
+    const url = await startDiskApp(true)
+    for (let i = 0; i < 3; i++) expect(await upload(url)).toBe(500)
+    expect(readdirSync(dir)).toHaveLength(0)
+  })
+
+  it('mantém os arquivos quando o handler responde com sucesso', async () => {
+    const url = await startDiskApp(false)
+    expect(await upload(url)).toBe(200)
+    expect(readdirSync(dir)).toHaveLength(1)
   })
 })
