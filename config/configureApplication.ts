@@ -15,6 +15,7 @@ import type {
   ScalarConfigurationOptions,
 } from '#exjs-controllers/config/expressServerOptions'
 import type { Application } from '#exjs-controllers/http/application'
+import { createDefaultErrorHandler } from '#exjs-controllers/http/errorHandler'
 import { ensureHttpContext, type Handler } from '#exjs-controllers/http/httpTypes'
 import { createHttpLoggerMiddleware } from '#exjs-controllers/logging/httpLogger'
 import {
@@ -99,9 +100,12 @@ export async function configureApplication(
 
   registerControllersWithOptions(app, options, ...controllers)
 
-  if (options.errorHandler) {
-    app.use(options.errorHandler)
+  if (options.errorHandler && options.errorHandler.length < 4) {
+    throw new Error(
+      '[configureApplication] errorHandler precisa declarar 4 parâmetros (error, request, response, next); com menos o Express o ignora.',
+    )
   }
+  app.use(options.errorHandler ?? createDefaultErrorHandler())
 
   return app
 }

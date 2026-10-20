@@ -40,12 +40,8 @@ export function createAuthenticationMiddleware(
     try {
       resolved = await authentication.currentUserChecker(action)
     } catch (err) {
-      return next(
-        new UnauthorizedError(
-          err instanceof Error ? err.message : 'Unauthorized',
-          { cause: err },
-        ),
-      )
+      // Mensagem fixa: a do checker pode vazar detalhes internos; a causa fica preservada.
+      return next(new UnauthorizedError('Unauthorized', { cause: err }))
     }
 
     if (resolved == null) {

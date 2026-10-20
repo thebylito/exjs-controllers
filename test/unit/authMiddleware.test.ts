@@ -192,7 +192,7 @@ describe('createAuthenticationMiddleware — authorization denied', () => {
 })
 
 describe('createAuthenticationMiddleware — checker throws', () => {
-  it('wraps thrown error in UnauthorizedError with cause preserved', async () => {
+  it('wraps thrown error in UnauthorizedError with a fixed message and cause preserved', async () => {
     const cause = new Error('token expired')
     const config: AuthenticationConfig = {
       currentUserChecker: vi.fn().mockRejectedValue(cause),
@@ -211,7 +211,7 @@ describe('createAuthenticationMiddleware — checker throws', () => {
 
     const passedErr = next.mock.calls[0][0]
     expect(passedErr).toBeInstanceOf(UnauthorizedError)
-    expect(passedErr.message).toBe('token expired')
+    expect(passedErr.message).toBe('Unauthorized')
     expect((passedErr as any).cause).toBe(cause)
     expect(config.authorizationChecker).not.toHaveBeenCalled()
   })
