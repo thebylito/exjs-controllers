@@ -105,14 +105,33 @@ middlewares: [
 ]
 ```
 
+<Callout title="Protect /docs">
+`/docs` and the OpenAPI JSON are public by default. Consumer middlewares run before the docs routes, so you can guard them:
+
+```ts
+middlewares: [{ path: '/docs', handlers: [requireAdmin] }]
+```
+</Callout>
+
 ### `errorHandler`
 
-Standard Express 5 error handler `(error, request, response, next) => void`. Mounted last so it sees every framework error.
+Standard Express 5 error handler `(error, request, response, next) => void`. Mounted last so it sees every framework error. A handler that does not declare exactly 4 parameters throws at bootstrap, before any route is registered, because Express would not treat it as an error handler.
+
+When `errorHandler` is omitted, `createDefaultErrorHandler()` is mounted (also exported from `exjs-controllers/http/errorHandler`, together with `resolveErrorStatus()`). It answers a JSON body `{ error, message, issues? }`:
+
+- 5xx always returns `message: 'Internal Server Error'`, with no stack, no internal message and no `issues` (a raw `ZodError` thrown by your code is a 500 without its issues).
+- 4xx echoes `error.message`, so messages of 4xx errors thrown by your own code reach the client.
+- `MulterError` becomes `413` (`LIMIT_FILE_SIZE`) or `400`.
+- `UseCaseInputValidationError` becomes `422` with `issues`.
+
+A custom handler should follow the same rule for 5xx:
 
 ```ts
 errorHandler: (error, _req, res, _next) => {
   const status = (error as { status?: number }).status ?? 500
-  res.status(status).json({ message: (error as Error).message })
+  res.status(status).json({
+    message: status >= 500 ? 'Internal Server Error' : (error as Error).message
+  })
 }
 ```
 

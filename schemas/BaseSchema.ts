@@ -37,6 +37,9 @@ export abstract class BaseSchema {
     const SchemaClass = this.constructor as typeof BaseSchema & {
       toZod(): z.ZodObject<ZodRawShape>
     }
-    SchemaClass.toZod().parse(this)
+    // Aplica transforms/defaults/coerções na instância; chaves fora do schema
+    // (ex.: via merge()) são preservadas.
+    const parsed = SchemaClass.toZod().parse(this)
+    Object.assign(this, parsed)
   }
 }

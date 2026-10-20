@@ -2,6 +2,7 @@ import {
   AUTHORIZATION_METADATA,
   type AuthorizationMetadata,
 } from '#exjs-controllers/metadata/symbols'
+import { ownMetadataEntry } from '#exjs-controllers/metadata/ownMetadata'
 import { legacyAuthorizationMap } from '#exjs-controllers/metadata/legacyStorage'
 import type { PrincipalKind } from '#exjs-controllers/core/authentication/types'
 
@@ -9,6 +10,9 @@ export type AuthorizationOptions = {
   permissions?: string[]
   kinds?: PrincipalKind[]
 }
+
+// Nomes já decorados com @Authorized por definição de classe (chave: metadata TC39).
+const decoratedInClass = new WeakMap<object, Set<string | symbol>>()
 
 type DecoratedMethod = (this: object, ...args: unknown[]) => unknown
 
@@ -36,12 +40,27 @@ export function Authorized(
   ): void {
     if (isStandardMethodDecoratorContext(ctxOrKey)) {
       const metadata = ctxOrKey.metadata as Record<symbol, unknown>
-      const authorizationMap =
-        (metadata[AUTHORIZATION_METADATA] as
-          | Map<string | symbol, AuthorizationMetadata>
-          | undefined) ?? new Map<string | symbol, AuthorizationMetadata>()
-      authorizationMap.set(ctxOrKey.name, authorization)
-      metadata[AUTHORIZATION_METADATA] = authorizationMap
+      const authorizationMap = ownMetadataEntry(
+        metadata,
+        AUTHORIZATION_METADATA,
+        () => new Map<string | symbol, AuthorizationMetadata>(),
+        (inherited) => new Map(inherited),
+      )
+      const name = ctxOrKey.name
+      // Conta só o que foi decorado nesta definição de classe: o clone herdado do pai
+      // já traz entradas que a subclasse pode legitimamente sobrescrever.
+      let seen = decoratedInClass.get(metadata)
+      if (!seen) {
+        seen = new Set()
+        decoratedInClass.set(metadata, seen)
+      }
+      if (seen.has(name)) {
+        throw new Error(
+          `[Authorized] @Authorized aplicado mais de uma vez em ${String(name)}; combine as permissões em uma única chamada.`,
+        )
+      }
+      seen.add(name)
+      authorizationMap.set(name, authorization)
       return
     }
 
@@ -49,7 +68,13 @@ export function Authorized(
     const authorizationMap =
       legacyAuthorizationMap.get(target) ??
       new Map<string | symbol, AuthorizationMetadata>()
-    authorizationMap.set(ctxOrKey as string | symbol, authorization)
+    const name = ctxOrKey as string | symbol
+    if (authorizationMap.has(name)) {
+      throw new Error(
+        `[Authorized] @Authorized aplicado mais de uma vez em ${String(name)}; combine as permissões em uma única chamada.`,
+      )
+    }
+    authorizationMap.set(name, authorization)
     legacyAuthorizationMap.set(target, authorizationMap)
   }
 }

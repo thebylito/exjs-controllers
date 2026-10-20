@@ -102,7 +102,7 @@ create(
 
 ## Validation error
 
-`UseCaseInputValidationError` is exported from `exjs-controllers/core/UseCase`. Catch it in your global error handler to return a structured 422:
+`UseCaseInputValidationError` is exported from `exjs-controllers/core/UseCase`. With the default error handler this already becomes a `422` with `issues`; a custom handler can do the same:
 
 ```ts
 import { UseCaseInputValidationError } from 'exjs-controllers/core/UseCase'

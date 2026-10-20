@@ -20,6 +20,10 @@ Accepted extensions: `.ts`, `.mts`, `.cts`, `.js`, `.mjs`, `.cjs`.
 
 A file's exports are inspected — only values that are functions **and** carry controller metadata (i.e. were decorated with `@Controller` or `@JsonController`) are considered controllers.
 
+<Callout type="warn" title="Keep fixtures out of discovered directories">
+Every `*.controller.*` file under `directories` is mounted, recursively. Keep test fixtures and example controllers outside those directories.
+</Callout>
+
 ## Default behaviour
 
 ```ts

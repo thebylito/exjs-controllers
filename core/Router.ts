@@ -1,3 +1,5 @@
+import { unlink } from 'node:fs/promises'
+
 import multer, { type Options as MulterOptions } from 'multer'
 
 import {
@@ -9,6 +11,7 @@ import {
   ForbiddenError,
 } from '#exjs-controllers/core/authentication/errors'
 import type { ResolvedPrincipal } from '#exjs-controllers/core/authentication/types'
+import { resolveUploadLimits } from '#exjs-controllers/core/uploadLimits'
 import type { ExpressServerOptions } from '#exjs-controllers/config/expressServerOptions'
 import type { Application } from '#exjs-controllers/http/application'
 import { ensureHttpContext, type Handler } from '#exjs-controllers/http/httpTypes'
@@ -25,12 +28,31 @@ import {
   legacyParamMap,
   type ParamMetadata,
 } from '#exjs-controllers/metadata/legacyStorage'
+import { classToZodOrUndefined } from '#exjs-controllers/core/ClassToZod'
 import { resolveDependency } from '#exjs-controllers/core/DependencyContainer'
 import { runWithControllerSpan } from '#exjs-controllers/observability/tracing'
 
 export type ControllerClass = new (...args: any[]) => object
 
 const registeredRoutes = new Set<string>()
+
+// Chaves que nunca podem ser copiadas do body para o DTO (prototype pollution
+// e sombreamento do protótipo da instância).
+const FORBIDDEN_BODY_KEYS: ReadonlySet<string> = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+])
+
+// Chaves declaradas via @Field (inclui herdadas). `null` quando a classe não
+// declara nenhum campo — nesse caso só as chaves proibidas são filtradas.
+function resolveDeclaredKeys(
+  schemaClass: (new (...args: any[]) => object) | undefined,
+): ReadonlySet<string> | null {
+  if (!schemaClass) return null
+  const schema = classToZodOrUndefined(schemaClass)
+  return schema ? new Set(Object.keys(schema.shape)) : null
+}
 
 export function _resetRoutesForTests(): void {
   registeredRoutes.clear()
@@ -118,6 +140,12 @@ function registerRoute(
     route.handlerName
   ] as (...args: unknown[]) => unknown
 
+  const declaredKeys = new Map(
+    handlerParams
+      .filter((p) => p.type === 'body')
+      .map((p) => [p.index, resolveDeclaredKeys(p.schemaClass)] as const),
+  )
+
   const authenticationHandler = resolveAuthenticationHandler(
     instance,
     route.handlerName,
@@ -142,7 +170,7 @@ function registerRoute(
     const ctx = ensureHttpContext(request, response)
 
     try {
-      const args = resolveArgs(ctx.request, ctx.response, handlerParams)
+      const args = resolveArgs(ctx.request, ctx.response, handlerParams, declaredKeys)
       const result = await runWithControllerSpan(
         {
           controllerName,
@@ -160,6 +188,10 @@ function registerRoute(
 
       writeControllerResult(ctx.response, result)
     } catch (error) {
+      // O handler falhou: os arquivos gravados pelo diskStorage ficariam órfãos.
+      if (uploadHandler) {
+        await removeUploadedFiles(request)
+      }
       next(error)
     }
   }
@@ -167,6 +199,32 @@ function registerRoute(
   routeHandlers.push(routeHandler)
 
   app.register(route.method, fullPath, ...routeHandlers)
+}
+
+// Remove do disco os arquivos que o multer (diskStorage) gravou para a request.
+// Sem `path` (memoryStorage) não há o que apagar. Nunca lança.
+async function removeUploadedFiles(request: { file?: unknown; files?: unknown }): Promise<void> {
+  const candidates: unknown[] = [request.file]
+  const files = request.files
+  if (Array.isArray(files)) {
+    candidates.push(...files)
+  } else if (files && typeof files === 'object') {
+    for (const group of Object.values(files)) {
+      if (Array.isArray(group)) {
+        candidates.push(...group)
+      }
+    }
+  }
+
+  const paths: string[] = []
+  for (const candidate of candidates) {
+    const path = (candidate as { path?: unknown } | null | undefined)?.path
+    if (typeof path === 'string') {
+      paths.push(path)
+    }
+  }
+
+  await Promise.allSettled(paths.map((path) => unlink(path)))
 }
 
 function writeControllerResult(
@@ -228,7 +286,10 @@ function resolveUploadMiddleware(params: ParamMetadata[]): Handler | undefined {
   const rawOptions = uploadParam.uploadOptions?.options
   const resolvedOptions =
     typeof rawOptions === 'function' ? rawOptions() : rawOptions
-  const instance = multer((resolvedOptions ?? {}) as MulterOptions)
+  const instance = multer({
+    ...(resolvedOptions ?? {}),
+    limits: resolveUploadLimits(resolvedOptions?.limits),
+  } as MulterOptions)
 
   return uploadParam.type === 'uploaded-files'
     ? instance.array(uploadParam.name)
@@ -247,6 +308,7 @@ function resolveArgs(
   },
   response: unknown,
   params: ParamMetadata[],
+  declaredKeys: ReadonlyMap<number, ReadonlySet<string> | null>,
 ): unknown[] {
   if (params.length === 0) return [request]
 
@@ -255,7 +317,7 @@ function resolveArgs(
   for (const p of params) {
     switch (p.type) {
       case 'body':
-        args[p.index] = hydrateBodyArg(request.body, p)
+        args[p.index] = hydrateBodyArg(request.body, p, declaredKeys.get(p.index) ?? null)
         break
       case 'param':
         args[p.index] = getFirstValue(request.params[p.name!])
@@ -317,7 +379,11 @@ function getFirstValue(value: string | string[] | undefined): string | undefined
   return Array.isArray(value) ? value[0] : value
 }
 
-function hydrateBodyArg(body: unknown, param: ParamMetadata): unknown {
+function hydrateBodyArg(
+  body: unknown,
+  param: ParamMetadata,
+  declaredKeys: ReadonlySet<string> | null,
+): unknown {
   if (!param.schemaClass) {
     return body
   }
@@ -336,7 +402,20 @@ function hydrateBodyArg(body: unknown, param: ParamMetadata): unknown {
     return new SchemaClass()
   }
 
-  return Object.assign(new SchemaClass(), body)
+  // Copia só chaves próprias e declaradas, por atribuição simples: nunca
+  // Object.assign com o body cru (mass assignment / troca de protótipo).
+  // Chaves que já são métodos na instância (`validate`, `merge`, `toString`,
+  // `hasOwnProperty`...) também ficam de fora, para não sombrear o método.
+  const instance = new SchemaClass() as Record<string, unknown>
+  const source = body as Record<string, unknown>
+  for (const key of Object.keys(source)) {
+    if (FORBIDDEN_BODY_KEYS.has(key)) continue
+    if (typeof instance[key] === 'function') continue
+    if (declaredKeys !== null && !declaredKeys.has(key)) continue
+    instance[key] = source[key]
+  }
+
+  return instance
 }
 
 function normalizePath(prefix: string, routePath: string): string {
@@ -377,6 +456,8 @@ function resolveAuthenticationHandler(
     authentication: serverOptions.authentication,
     requiredPermissions: authorization?.permissions ?? [],
     allowedKinds: authorization?.kinds,
-    hasAuthorizedDecorator,
+    // Fail-closed: @Authorized ou qualquer @CurrentUser/@CurrentApiKey não opcional exige principal.
+    requirePrincipal:
+      hasAuthorizedDecorator || principalParams.some(p => p.optional !== true),
   })
 }

@@ -69,7 +69,22 @@ export interface HttpLoggerOptions {
   level?: Level
   stream?: LogStream
   filePath?: string
+  /**
+   * Headers (minúsculos) que um proxy de borda confiável preenche com o IP do
+   * cliente (ex.: `cf-connecting-ip`); o primeiro presente vence. Qualquer
+   * cliente pode forjar esses headers, então só configure se a borda os
+   * sobrescreve. Padrão: `[]`.
+   */
+  remoteIpHeaders?: string[]
+  /**
+   * Incluir a query string em `requestUrl` e `referrer`. Query strings podem
+   * carregar tokens e dados pessoais, então ficam fora por padrão.
+   * Padrão: `false`.
+   */
+  logQueryString?: boolean
 }
+
+export const CORRELATION_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/
 
 export function createHttpLoggerMiddleware(
   options: HttpLoggerOptions = {},
@@ -78,11 +93,21 @@ export function createHttpLoggerMiddleware(
   const genCorrelationId = options.genCorrelationId ?? randomUUID
   const correlationIdHeaderName =
     options.correlationIdHeaderName ?? DEFAULT_CORRELATION_ID_HEADER
+  const remoteIpHeaders = (options.remoteIpHeaders ?? []).map((name) =>
+    name.toLowerCase(),
+  )
+  const logQueryString = options.logQueryString ?? false
 
   setBaseLogger(logger)
 
   return (request, response, next) => {
     const ctx = ensureHttpContext(request, response)
+    // Capturados na entrada: após um abort do cliente, no `close` o socket já
+    // não tem endereço e `request.ip` vira `undefined`.
+    const addresses: LoggedAddresses = {
+      remoteIp: resolveRemoteIp(ctx.request, remoteIpHeaders),
+      serverIp: ctx.response.socket?.localAddress ?? ctx.request.ip ?? '-',
+    }
     const correlationId = resolveCorrelationId(
       ctx.request,
       correlationIdHeaderName,
@@ -95,10 +120,31 @@ export function createHttpLoggerMiddleware(
 
     ctx.response.setHeader('x-correlation-id', correlationId)
 
+    // Roda num listener de `close`, fora do caminho de erros do Express: uma
+    // exceção aqui derrubaria o processo, então nunca pode propagar.
     const writeLog = () => {
-      requestContext.logger.info(
-        buildHttpLogPayload(ctx.request, ctx.response, requestContext),
-      )
+      try {
+        requestContext.logger.info(
+          buildHttpLogPayload(
+            ctx.request,
+            ctx.response,
+            requestContext,
+            addresses,
+            logQueryString,
+          ),
+        )
+      } catch (err) {
+        // O próprio stream pode estar lançando (ENOSPC, stream customizado):
+        // o aviso também não pode escapar do listener.
+        try {
+          requestContext.logger.warn(
+            { err },
+            '[httpLogger] failed to write the access log',
+          )
+        } catch {
+          // nunca propaga
+        }
+      }
     }
 
     ctx.response.once('close', writeLog)
@@ -359,23 +405,30 @@ function isHttpRequestPayload(value: unknown): value is HttpRequestLogPayload {
   return typeof value === 'object' && value !== null
 }
 
+interface LoggedAddresses {
+  remoteIp: string
+  serverIp: string
+}
+
 function buildHttpLogPayload(
   request: HttpRequest,
   response: HttpResponse,
   context: Pick<RequestLogContext, 'traceId' | 'spanId'>,
+  addresses: LoggedAddresses,
+  logQueryString: boolean,
 ): HttpLogPayload {
   return {
     ...(context.traceId ? { traceId: context.traceId } : {}),
     ...(context.spanId ? { spanId: context.spanId } : {}),
     httpRequest: {
       requestMethod: request.method || 'GET',
-      requestUrl: request.url || request.path,
+      requestUrl: resolveRequestUrl(request, logQueryString),
       requestSize: resolveRequestSize(request),
       status: String(response.statusCode),
       userAgent: getRequestHeader(request, 'user-agent'),
-      remoteIp: resolveRemoteIp(request),
-      serverIp: response.socket?.localAddress ?? request.ip ?? '-',
-      referrer: getRequestHeader(request, 'referer', 'referrer'),
+      remoteIp: addresses.remoteIp,
+      serverIp: addresses.serverIp,
+      referrer: resolveReferrer(request, logQueryString),
     },
   }
 }
@@ -385,53 +438,66 @@ function resolveCorrelationId(
   correlationIdHeaderName: string,
   genCorrelationId: () => string,
 ): string {
-  return (
-    getHeaderValue(request.get(correlationIdHeaderName)) ??
-    getHeaderValue(request.get('x-request-id')) ??
-    getHeaderValue(request.get('x-transaction-id')) ??
-    genCorrelationId()
-  )
+  // Valores fora do padrão (tamanho, caracteres de controle) são tratados como
+  // ausentes, evitando log injection e response splitting via header.
+  for (const headerName of [
+    correlationIdHeaderName,
+    'x-request-id',
+    'x-transaction-id',
+  ]) {
+    const value = getHeaderValue(request.get(headerName))
+    if (value !== undefined && CORRELATION_ID_PATTERN.test(value)) {
+      return value
+    }
+  }
+
+  return genCorrelationId()
 }
 
-function resolveRemoteIp(request: HttpRequest): string {
-  // Headers que proxies de borda setam com o IP real do cliente. O Cloudflare
-  // sempre sobrescreve `cf-connecting-ip`, então ele é confiável mesmo sem
-  // `trust proxy` configurado e independe de acertar a contagem de hops.
-  const edgeClientIp = getRequestHeader(
-    request,
-    'cf-connecting-ip',
-    'true-client-ip',
-  )
+function resolveRemoteIp(
+  request: HttpRequest,
+  remoteIpHeaders: string[],
+): string {
+  // Só headers que o integrador declarou como preenchidos por um proxy de
+  // borda confiável: qualquer outro pode ser forjado pelo cliente.
+  const edgeClientIp =
+    remoteIpHeaders.length > 0
+      ? getRequestHeader(request, ...remoteIpHeaders)
+      : '-'
   if (edgeClientIp !== '-') {
     return edgeClientIp
   }
 
-  const forwardedFor = getHeaderValue(request.get('x-forwarded-for'))
-  const firstForwardedHop = forwardedFor?.split(',')[0]?.trim()
-
-  return (
-    request.ip ||
-    (firstForwardedHop ? firstForwardedHop : undefined) ||
-    request.socket?.remoteAddress ||
-    '-'
-  )
+  // Sem fallback para o X-Forwarded-For cru: `request.ip` já o respeita quando
+  // `trust proxy` está configurado; fora disso ele é forjável pelo cliente.
+  return request.ip || request.socket?.remoteAddress || '-'
 }
 
 function resolveRequestSize(request: HttpRequest): string {
-  const contentLength = getHeaderValue(request.get('content-length'))
-  if (contentLength) {
-    return contentLength
-  }
+  // Só o Content-Length declarado; sem ele o tamanho é desconhecido ('-').
+  // Nunca serializa `request.body`: com multipart ele pode ser enorme/esparso.
+  return getHeaderValue(request.get('content-length')) || '-'
+}
 
-  if (typeof request.body === 'string') {
-    return Buffer.byteLength(request.body).toString()
-  }
+function stripQueryString(value: string): string {
+  const cut = value.search(/[?#]/)
+  return cut === -1 ? value : value.slice(0, cut)
+}
 
-  if (request.body && typeof request.body === 'object') {
-    return Buffer.byteLength(JSON.stringify(request.body)).toString()
-  }
+function resolveRequestUrl(
+  request: HttpRequest,
+  logQueryString: boolean,
+): string {
+  const url = request.originalUrl || request.url || request.path
+  return logQueryString ? url : stripQueryString(url)
+}
 
-  return '0'
+function resolveReferrer(
+  request: HttpRequest,
+  logQueryString: boolean,
+): string {
+  const referrer = getRequestHeader(request, 'referer', 'referrer')
+  return logQueryString ? referrer : stripQueryString(referrer)
 }
 
 function getRequestHeader(request: HttpRequest, ...names: string[]): string {

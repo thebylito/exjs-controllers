@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod'
 import { FIELD_METADATA } from '#exjs-controllers/metadata/symbols'
+import { ownMetadataEntry } from '#exjs-controllers/metadata/ownMetadata'
 import { legacyFieldMap } from '#exjs-controllers/metadata/legacyStorage'
 
 export function Field(schema: ZodType) {
@@ -11,8 +12,13 @@ export function Field(schema: ZodType) {
       const ctx = ctxOrKey as ClassFieldDecoratorContext
       const meta = ctx.metadata as Record<symbol, unknown>
       if (!meta) return
-      if (!meta[FIELD_METADATA]) meta[FIELD_METADATA] = {} as Record<string, ZodType>
-      ;(meta[FIELD_METADATA] as Record<string, ZodType>)[ctx.name as string] = schema
+      const fields = ownMetadataEntry<Record<string, ZodType>>(
+        meta,
+        FIELD_METADATA,
+        () => ({}),
+        (inherited) => ({ ...inherited }),
+      )
+      fields[ctx.name as string] = schema
       return
     }
 

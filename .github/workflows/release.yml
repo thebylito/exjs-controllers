@@ -1,28 +1,28 @@
 name: Release
 
 # Triggered by pushing a tag like v0.10.0 (see RELEASING.md).
-# Publishes to npm via Trusted Publishing (OIDC, no token) and creates the
-# GitHub Release with the matching CHANGELOG.md section as notes.
+# Two jobs: `build` runs the tests and packs the tarball without any publish
+# rights; `publish` waits for approval of the protected `npm` environment, then
+# publishes the prebuilt tarball to npm via Trusted Publishing (OIDC, no token)
+# and creates the GitHub Release with the matching CHANGELOG.md section as notes.
 on:
   push:
     tags: ['v*']
-
-permissions:
-  contents: write # gh release create
-  id-token: write # npm trusted publishing (OIDC)
 
 env:
   COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
 
 jobs:
-  release:
-    name: Publish ${{ github.ref_name }}
+  build:
+    name: Build ${{ github.ref_name }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
 
       - name: Enable Corepack
-        run: npm install -g corepack@latest && corepack enable
+        run: npm install -g corepack@0.36.0 && corepack enable
 
       # Node 24 bundles npm >= 11.5.1, required for OIDC publishing.
       # No `registry-url` here: it would write an _authToken entry to .npmrc
@@ -49,11 +49,50 @@ jobs:
       - run: yarn build
       - run: yarn test
 
-      - name: Publish to npm
-        run: npm publish --provenance --access public
-
-      - name: Pack tarball for the GitHub Release
+      - name: Pack tarball
         run: npm pack --ignore-scripts
+
+      # Dry run only validates the tarball; it needs no OIDC or token.
+      - name: Dry-run publish
+        run: npm publish --dry-run --ignore-scripts ./exjs-controllers-*.tgz
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: release
+          path: |
+            exjs-controllers-*.tgz
+            release-notes.md
+          if-no-files-found: error
+
+  publish:
+    name: Publish ${{ github.ref_name }}
+    needs: build
+    runs-on: ubuntu-latest
+    # Protected environment: waits for the required reviewer (see RELEASING.md).
+    environment: npm
+    permissions:
+      id-token: write # npm trusted publishing (OIDC)
+      contents: write # gh release create
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Enable Corepack
+        run: npm install -g corepack@0.36.0 && corepack enable
+
+      # Node 24 bundles npm >= 11.5.1, required for OIDC publishing.
+      # No `registry-url` here: it would write an _authToken entry to .npmrc
+      # and OIDC must run without NODE_AUTH_TOKEN.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public "./exjs-controllers-${GITHUB_REF_NAME#v}.tgz"
 
       - name: Create GitHub Release
         env:

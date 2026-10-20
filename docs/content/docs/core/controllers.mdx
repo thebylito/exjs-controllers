@@ -88,7 +88,7 @@ class OrdersController {
 
 | Property         | Type                  | Description                                                                                          |
 | ---------------- | --------------------- | ---------------------------------------------------------------------------------------------------- |
-| `inputClass`     | `typeof BaseSchema`   | DTO class used to document the request body (`requestBody.content['application/json'].schema`).      |
+| `inputClass`     | `typeof BaseSchema`   | DTO class used to **document** the request body (`requestBody.content['application/json'].schema`); it does not validate. Validate through `@Body(Dto)` + `validate()`. |
 | `outputClass`    | `typeof BaseSchema`   | DTO class used to document the `200` response body.                                                  |
 | `outputIsArray`  | `boolean`             | When `true`, the OpenAPI response schema is `{ type: 'array', items: <outputClass> }`.               |
 | `summary`        | `string`              | Short, single-line description shown in the OpenAPI docs / Scalar UI.                                |
@@ -124,7 +124,7 @@ async upload(@Res() res: HttpResponse, @Body() body: unknown): Promise<void> {
 
 ## Error handling
 
-Any exception thrown inside a handler is forwarded to Express through `next(error)`. Use a custom `errorHandler` middleware on [`configureApplication`](/docs/configuration/configure-application) to convert framework errors (e.g. `UnauthorizedError`, `ForbiddenError`, `UseCaseInputValidationError`) into HTTP responses.
+Any exception thrown inside a handler is forwarded to Express through `next(error)`. When `errorHandler` is omitted, the default handler (`createDefaultErrorHandler()`: JSON `{ error, message, issues? }`, generic `Internal Server Error` for 5xx) is mounted. To customise it, use a custom `errorHandler` middleware on [`configureApplication`](/docs/configuration/configure-application) to convert framework errors (e.g. `UnauthorizedError`, `ForbiddenError`, `UseCaseInputValidationError`) into HTTP responses.
 
 ```ts
 await configureApplication(app, {
@@ -133,7 +133,9 @@ await configureApplication(app, {
     const status = (error as { status?: number; statusCode?: number }).status
       ?? (error as { statusCode?: number }).statusCode
       ?? 500
-    response.status(status).json({ message: (error as Error).message })
+    response.status(status).json({
+      message: status >= 500 ? 'Internal Server Error' : (error as Error).message
+    })
   }
 })
 ```

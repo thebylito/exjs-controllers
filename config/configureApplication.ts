@@ -15,6 +15,7 @@ import type {
   ScalarConfigurationOptions,
 } from '#exjs-controllers/config/expressServerOptions'
 import type { Application } from '#exjs-controllers/http/application'
+import { createDefaultErrorHandler } from '#exjs-controllers/http/errorHandler'
 import { ensureHttpContext, type Handler } from '#exjs-controllers/http/httpTypes'
 import { createHttpLoggerMiddleware } from '#exjs-controllers/logging/httpLogger'
 import {
@@ -40,6 +41,14 @@ export async function configureApplication(
   app: Application,
   options: ExpressServerOptions,
 ): Promise<Application> {
+  // Validado antes de qualquer registro de rota, para que um bootstrap que falhe
+  // aqui possa ser refeito no mesmo processo sem "Rota duplicada".
+  if (options.errorHandler && options.errorHandler.length !== 4) {
+    throw new Error(
+      '[configureApplication] errorHandler precisa declarar exatamente 4 parâmetros (error, request, response, next); com outra aridade o Express o ignora.',
+    )
+  }
+
   const controllers = await resolveControllers(options)
   const openApiDocuments = shouldServeOpenApi(options)
     ? resolveOpenApiDocuments(controllers, options)
@@ -99,9 +108,7 @@ export async function configureApplication(
 
   registerControllersWithOptions(app, options, ...controllers)
 
-  if (options.errorHandler) {
-    app.use(options.errorHandler)
-  }
+  app.use(options.errorHandler ?? createDefaultErrorHandler())
 
   return app
 }
@@ -346,9 +353,9 @@ function resolveScalarConfigurationForRequest(
     return scalarConfiguration
   }
 
-  const host = request.get('host')
+  const origin = resolveRequestOrigin(request)
 
-  if (!host) {
+  if (!origin) {
     return scalarConfiguration ?? {}
   }
 
@@ -356,20 +363,39 @@ function resolveScalarConfigurationForRequest(
     ...(scalarConfiguration ?? {}),
     servers: [
       {
-        url: getRequestOrigin(request),
+        url: origin,
       },
     ],
   }
 }
 
-function getRequestOrigin(
+// Host (e X-Forwarded-Proto) são controlados pelo cliente e a configuração do
+// Scalar vai inline num <script>: só aceitamos hostname/IPv6 com porta opcional.
+const HOST_HEADER_PATTERN =
+  /^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)(:\d{1,5})?$/
+
+function resolveRequestOrigin(
   request: Parameters<Application['get']>[1] extends (
     ...args: infer TArgs
   ) => unknown
     ? TArgs[0]
     : never,
-): string {
-  return `${request.protocol}://${request.get('host')}`
+): string | undefined {
+  const host = request.get('host')
+
+  if (!host || !HOST_HEADER_PATTERN.test(host)) {
+    return undefined
+  }
+
+  // Sob `trust proxy`, `request.protocol` vem do X-Forwarded-Proto (controlável
+  // pelo cliente quando o proxy concatena): só aceitamos http/https.
+  const protocol = request.protocol
+
+  if (protocol !== 'http' && protocol !== 'https') {
+    return undefined
+  }
+
+  return `${protocol}://${host}`
 }
 
 async function resolveControllers(
