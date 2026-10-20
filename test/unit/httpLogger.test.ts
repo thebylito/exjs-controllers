@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CORRELATION_ID_PATTERN,
   createHttpLoggerMiddleware,
+  type HttpLoggerOptions,
 } from '#exjs-controllers/logging/httpLogger'
 import {
   captureRequestTraceContext,
@@ -30,13 +31,17 @@ class FakeResponse extends EventEmitter {
 }
 
 function buildRequest(
-  overrides: { ip?: string; headers?: Record<string, string> } = {},
+  overrides: {
+    ip?: string
+    url?: string
+    headers?: Record<string, string>
+  } = {},
 ) {
   const headers = overrides.headers ?? {}
   return {
     method: 'GET',
     path: '/some-path',
-    url: '/some-path',
+    url: overrides.url ?? '/some-path',
     ip: 'ip' in overrides ? overrides.ip : '10.0.0.5',
     socket: { remoteAddress: '172.16.0.9', bytesRead: 0 },
     get(header: string) {
@@ -47,6 +52,10 @@ function buildRequest(
 
 async function captureLog(
   request: ReturnType<typeof buildRequest> = buildRequest(),
+  loggerOptions: Pick<
+    HttpLoggerOptions,
+    'remoteIpHeaders' | 'logQueryString'
+  > = {},
 ): Promise<string> {
   const chunks: string[] = []
   const logger = pino(
@@ -61,6 +70,7 @@ async function captureLog(
   const middleware = createHttpLoggerMiddleware({
     logger,
     genCorrelationId: () => 'some_uuid',
+    ...loggerOptions,
   })
 
   const response = new FakeResponse()
@@ -131,18 +141,67 @@ describe('createHttpLoggerMiddleware', () => {
     expect(payload.httpRequest.remoteIp).toBe('203.0.113.10')
   })
 
-  it('prioriza CF-Connecting-IP sobre request.ip (cliente real atrás do Cloudflare)', async () => {
+  it('ignora CF-Connecting-IP e True-Client-IP por padrão (usa request.ip)', async () => {
     const chunk = await captureLog(
       buildRequest({
         ip: '10.0.1.14',
-        headers: { 'cf-connecting-ip': '198.51.100.7' },
+        headers: {
+          'cf-connecting-ip': '198.51.100.7',
+          'true-client-ip': '198.51.100.8',
+        },
       }),
     )
 
     const payload = JSON.parse(chunk) as {
       httpRequest: { remoteIp: string }
     }
-    expect(payload.httpRequest.remoteIp).toBe('198.51.100.7')
+    expect(payload.httpRequest.remoteIp).toBe('10.0.1.14')
+  })
+
+  it('usa o primeiro header presente de remoteIpHeaders quando configurado', async () => {
+    const chunk = await captureLog(
+      buildRequest({
+        ip: '10.0.1.14',
+        headers: { 'true-client-ip': '198.51.100.8' },
+      }),
+      { remoteIpHeaders: ['cf-connecting-ip', 'true-client-ip'] },
+    )
+
+    const payload = JSON.parse(chunk) as {
+      httpRequest: { remoteIp: string }
+    }
+    expect(payload.httpRequest.remoteIp).toBe('198.51.100.8')
+  })
+
+  it('omite a query string da URL e do referrer por padrão', async () => {
+    const chunk = await captureLog(
+      buildRequest({
+        url: '/users?token=abc',
+        headers: { referer: 'https://x.test/a?b=1' },
+      }),
+    )
+
+    const payload = JSON.parse(chunk) as {
+      httpRequest: { requestUrl: string; referrer: string }
+    }
+    expect(payload.httpRequest.requestUrl).toBe('/users')
+    expect(payload.httpRequest.referrer).toBe('https://x.test/a')
+  })
+
+  it('inclui a query string com logQueryString: true', async () => {
+    const chunk = await captureLog(
+      buildRequest({
+        url: '/users?token=abc',
+        headers: { referer: 'https://x.test/a?b=1' },
+      }),
+      { logQueryString: true },
+    )
+
+    const payload = JSON.parse(chunk) as {
+      httpRequest: { requestUrl: string; referrer: string }
+    }
+    expect(payload.httpRequest.requestUrl).toBe('/users?token=abc')
+    expect(payload.httpRequest.referrer).toBe('https://x.test/a?b=1')
   })
 
   it('cai para o primeiro hop do X-Forwarded-For quando request.ip está ausente', async () => {

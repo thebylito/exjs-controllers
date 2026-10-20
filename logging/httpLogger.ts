@@ -69,6 +69,19 @@ export interface HttpLoggerOptions {
   level?: Level
   stream?: LogStream
   filePath?: string
+  /**
+   * Headers (minúsculos) que um proxy de borda confiável preenche com o IP do
+   * cliente (ex.: `cf-connecting-ip`); o primeiro presente vence. Qualquer
+   * cliente pode forjar esses headers, então só configure se a borda os
+   * sobrescreve. Padrão: `[]`.
+   */
+  remoteIpHeaders?: string[]
+  /**
+   * Incluir a query string em `requestUrl` e `referrer`. Query strings podem
+   * carregar tokens e dados pessoais, então ficam fora por padrão.
+   * Padrão: `false`.
+   */
+  logQueryString?: boolean
 }
 
 export const CORRELATION_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/
@@ -80,6 +93,10 @@ export function createHttpLoggerMiddleware(
   const genCorrelationId = options.genCorrelationId ?? randomUUID
   const correlationIdHeaderName =
     options.correlationIdHeaderName ?? DEFAULT_CORRELATION_ID_HEADER
+  const remoteIpHeaders = (options.remoteIpHeaders ?? []).map((name) =>
+    name.toLowerCase(),
+  )
+  const logQueryString = options.logQueryString ?? false
 
   setBaseLogger(logger)
 
@@ -109,6 +126,8 @@ export function createHttpLoggerMiddleware(
             ctx.response,
             requestContext,
             bytesReadAtStart,
+            remoteIpHeaders,
+            logQueryString,
           ),
         )
       } catch (err) {
@@ -382,19 +401,21 @@ function buildHttpLogPayload(
   response: HttpResponse,
   context: Pick<RequestLogContext, 'traceId' | 'spanId'>,
   bytesReadAtStart: number,
+  remoteIpHeaders: string[],
+  logQueryString: boolean,
 ): HttpLogPayload {
   return {
     ...(context.traceId ? { traceId: context.traceId } : {}),
     ...(context.spanId ? { spanId: context.spanId } : {}),
     httpRequest: {
       requestMethod: request.method || 'GET',
-      requestUrl: request.url || request.path,
+      requestUrl: resolveRequestUrl(request, logQueryString),
       requestSize: resolveRequestSize(request, bytesReadAtStart),
       status: String(response.statusCode),
       userAgent: getRequestHeader(request, 'user-agent'),
-      remoteIp: resolveRemoteIp(request),
+      remoteIp: resolveRemoteIp(request, remoteIpHeaders),
       serverIp: response.socket?.localAddress ?? request.ip ?? '-',
-      referrer: getRequestHeader(request, 'referer', 'referrer'),
+      referrer: resolveReferrer(request, logQueryString),
     },
   }
 }
@@ -420,15 +441,16 @@ function resolveCorrelationId(
   return genCorrelationId()
 }
 
-function resolveRemoteIp(request: HttpRequest): string {
-  // Headers que proxies de borda setam com o IP real do cliente. O Cloudflare
-  // sempre sobrescreve `cf-connecting-ip`, então ele é confiável mesmo sem
-  // `trust proxy` configurado e independe de acertar a contagem de hops.
-  const edgeClientIp = getRequestHeader(
-    request,
-    'cf-connecting-ip',
-    'true-client-ip',
-  )
+function resolveRemoteIp(
+  request: HttpRequest,
+  remoteIpHeaders: string[],
+): string {
+  // Só headers que o integrador declarou como preenchidos por um proxy de
+  // borda confiável: qualquer outro pode ser forjado pelo cliente.
+  const edgeClientIp =
+    remoteIpHeaders.length > 0
+      ? getRequestHeader(request, ...remoteIpHeaders)
+      : '-'
   if (edgeClientIp !== '-') {
     return edgeClientIp
   }
@@ -459,6 +481,27 @@ function resolveRequestSize(
   }
 
   return '0'
+}
+
+function stripQueryString(value: string): string {
+  const cut = value.search(/[?#]/)
+  return cut === -1 ? value : value.slice(0, cut)
+}
+
+function resolveRequestUrl(
+  request: HttpRequest,
+  logQueryString: boolean,
+): string {
+  const url = request.originalUrl || request.url || request.path
+  return logQueryString ? url : stripQueryString(url)
+}
+
+function resolveReferrer(
+  request: HttpRequest,
+  logQueryString: boolean,
+): string {
+  const referrer = getRequestHeader(request, 'referer', 'referrer')
+  return logQueryString ? referrer : stripQueryString(referrer)
 }
 
 function getRequestHeader(request: HttpRequest, ...names: string[]): string {
