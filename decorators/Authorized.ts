@@ -11,6 +11,9 @@ export type AuthorizationOptions = {
   kinds?: PrincipalKind[]
 }
 
+// Nomes já decorados com @Authorized por definição de classe (chave: metadata TC39).
+const decoratedInClass = new WeakMap<object, Set<string | symbol>>()
+
 type DecoratedMethod = (this: object, ...args: unknown[]) => unknown
 
 function isAuthorizationOptions(value: unknown): value is AuthorizationOptions {
@@ -37,7 +40,6 @@ export function Authorized(
   ): void {
     if (isStandardMethodDecoratorContext(ctxOrKey)) {
       const metadata = ctxOrKey.metadata as Record<symbol, unknown>
-      const ownedBefore = Object.hasOwn(metadata, AUTHORIZATION_METADATA)
       const authorizationMap = ownMetadataEntry(
         metadata,
         AUTHORIZATION_METADATA,
@@ -45,12 +47,19 @@ export function Authorized(
         (inherited) => new Map(inherited),
       )
       const name = ctxOrKey.name
-      // Só a entrada própria conta: a herdada da classe pai pode ser sobrescrita.
-      if (ownedBefore && authorizationMap.has(name)) {
+      // Conta só o que foi decorado nesta definição de classe: o clone herdado do pai
+      // já traz entradas que a subclasse pode legitimamente sobrescrever.
+      let seen = decoratedInClass.get(metadata)
+      if (!seen) {
+        seen = new Set()
+        decoratedInClass.set(metadata, seen)
+      }
+      if (seen.has(name)) {
         throw new Error(
           `[Authorized] @Authorized aplicado mais de uma vez em ${String(name)}; combine as permissões em uma única chamada.`,
         )
       }
+      seen.add(name)
       authorizationMap.set(name, authorization)
       return
     }
