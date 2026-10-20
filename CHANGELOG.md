@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - **O documento OpenAPI passa a ser `3.2.0`** (antes `3.1.0`). A 3.2 é a primeira versão com a operação `query` na Path Item, onde as rotas `@QueryMethod` são documentadas, com `requestBody`. O restante do documento não muda.
+- **O Scalar passa a carregar uma versão fixa do bundle** (`@scalar/api-reference@1.75.0`, exportada como `DEFAULT_SCALAR_CDN`). Antes a página apontava para `https://cdn.jsdelivr.net/npm/@scalar/api-reference` sem versão, ou seja, a última publicada, e a UI podia mudar ou quebrar a cada release do Scalar sem nenhuma mudança na lib. A nova opção `scalar.cdn` troca a URL (outra versão ou cópia self-hosted).
 
 ### Security
 

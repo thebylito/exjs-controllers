@@ -26,6 +26,9 @@ import {
 const DEFAULT_OPENAPI_DOCUMENT_PATH = '/docs/openapi.json'
 const DEFAULT_SCALAR_REFERENCE_PATH = '/docs'
 
+/** Bundle do Scalar servido por padrão; sobrescreva com `scalar.cdn`. */
+export const DEFAULT_SCALAR_CDN = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.75.0'
+
 interface ResolvedOpenApiDocument {
   key: string
   documentPath: string
@@ -108,6 +111,7 @@ function buildScalarConfiguration(
   openApiDocument: ReturnType<typeof generateOpenApiDocument>,
 ): ScalarConfigurationOptions {
   const scalarConfiguration: ScalarConfigurationOptions = {
+    cdn: DEFAULT_SCALAR_CDN,
     ...(options.scalar ?? {}),
   }
   const securitySchemeName = resolveScalarSecuritySchemeName(

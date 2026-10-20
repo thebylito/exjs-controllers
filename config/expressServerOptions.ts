@@ -124,6 +124,12 @@ export interface ScalarBeforeRequestContext {
 }
 
 export interface ScalarConfigurationOptions {
+  /**
+   * URL do bundle `@scalar/api-reference` carregado pela página. Por padrão
+   * aponta para uma versão fixa (`DEFAULT_SCALAR_CDN`), para que a UI não mude
+   * sozinha a cada release do Scalar.
+   */
+  cdn?: string
   servers?: OpenApiServer[]
   referencePath?: string
   authentication?: ScalarAuthenticationConfiguration

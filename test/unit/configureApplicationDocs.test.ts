@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { configureApplication } from '#exjs-controllers/config/configureApplication'
+import {
+  configureApplication,
+  DEFAULT_SCALAR_CDN,
+} from '#exjs-controllers/config/configureApplication'
 import type { ExpressServerOptions } from '#exjs-controllers/config/expressServerOptions'
 import { _resetRoutesForTests } from '#exjs-controllers/core/Router'
 import { JsonController } from '#exjs-controllers/decorators/Controller'
@@ -146,6 +149,22 @@ describe('configureApplication — documentos OpenAPI', () => {
     expect(publicUi.body).not.toContain('/docs/admin/openapi.json')
     expect(adminUi.status).toBe(200)
     expect(adminUi.body).toContain('/docs/admin/openapi.json')
+  })
+
+  it('carrega o Scalar de uma versão fixa do CDN por padrão', async () => {
+    const base = await start({ openapi: { documentation }, enableScalar: true })
+
+    expect((await getText(`${base}/docs`)).body).toContain(`src="${DEFAULT_SCALAR_CDN}"`)
+  })
+
+  it('scalar.cdn sobrescreve o bundle padrão', async () => {
+    const cdn = 'https://cdn.example.com/scalar.js'
+    const base = await start({ openapi: { documentation }, scalar: { cdn }, enableScalar: true })
+
+    const { body } = await getText(`${base}/docs`)
+
+    expect(body).toContain(`src="${cdn}"`)
+    expect(body).not.toContain(DEFAULT_SCALAR_CDN)
   })
 
   it('caminho de documento repetido falha no bootstrap', async () => {

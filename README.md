@@ -436,7 +436,7 @@ const document = generateOpenApiDocument([UsersController], options)
 
 When `openapi.documentation` is set, the document is automatically served at `/docs/openapi.json` (configurable via `openapi.documentPath`).
 
-When `enableScalar: true` is set, Scalar API reference is served at `/docs` (configurable via `scalar.referencePath`).
+When `enableScalar: true` is set, Scalar API reference is served at `/docs` (configurable via `scalar.referencePath`). The page loads a pinned `@scalar/api-reference` bundle from jsDelivr (`DEFAULT_SCALAR_CDN`), so the UI only changes when the framework bumps it; set `scalar.cdn` to load another version or a self-hosted copy.
 
 ### Multiple documents
 
