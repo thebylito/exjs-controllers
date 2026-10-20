@@ -82,12 +82,18 @@ function fieldPart(field: string, value: string): Buffer {
   )
 }
 
+// `connection: close`: o servidor aborta multiparts rejeitados e o cliente
+// reaproveitaria a conexão keep-alive morta (fetch failed / write EPIPE).
+function multipartHeaders(): Record<string, string> {
+  return { connection: 'close', 'content-type': `multipart/form-data; boundary=${BOUNDARY}` }
+}
+
 async function postMultipart(path: string, parts: Buffer[]) {
   const body = Buffer.concat([...parts, Buffer.from(`--${BOUNDARY}--\r\n`)])
   const start = performance.now()
   const response = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
-    headers: { 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
+    headers: multipartHeaders(),
     body,
   })
   const json = (await response.json()) as any
@@ -172,7 +178,7 @@ describe('upload limits — logger ativo (uploads-2)', () => {
       // Corpo em stream => Transfer-Encoding: chunked, sem content-length.
       const response = await fetch(`${baseUrl}/up/one`, {
         method: 'POST',
-        headers: { 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
+        headers: multipartHeaders(),
         body: new ReadableStream({
           start(controller) {
             controller.enqueue(new Uint8Array(body))
@@ -236,7 +242,7 @@ describe('upload — autenticação antes do multer', () => {
       ])
       const res = await fetch(`http://127.0.0.1:${address.port}/secure/upload`, {
         method: 'POST',
-        headers: { 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
+        headers: multipartHeaders(),
         body,
       })
       await res.text()
@@ -301,7 +307,7 @@ describe('diskStorage cleanup', () => {
     ])
     const res = await fetch(`${url}/disk/one`, {
       method: 'POST',
-      headers: { connection: 'close', 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
+      headers: multipartHeaders(),
       body,
     })
     await res.text()

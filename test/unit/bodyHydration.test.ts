@@ -48,9 +48,20 @@ class CreateItem implements UseCase<CreateItemInput, { name: string }> {
   }
 }
 
+@Injectable()
+@DefineUseCase()
+class RunUndeclared implements UseCase<UndeclaredInput, { ok: boolean }> {
+  execute(_input: UndeclaredInput) {
+    return { ok: true }
+  }
+}
+
 @JsonController('/items')
 class ItemsController {
-  constructor(@Inject(CreateItem) private readonly createItem: CreateItem) {}
+  constructor(
+    @Inject(CreateItem) private readonly createItem: CreateItem,
+    @Inject(RunUndeclared) private readonly runUndeclared: RunUndeclared,
+  ) {}
 
   @Post('/echo')
   echo(@Body(CreateItemInput) input: CreateItemInput) {
@@ -78,6 +89,12 @@ class ItemsController {
   undeclared(@Body(UndeclaredInput) input: UndeclaredInput) {
     captured = input
     return {}
+  }
+
+  @Post('/undeclared-usecase')
+  undeclaredUseCase(@Body(UndeclaredInput) input: UndeclaredInput) {
+    captured = input
+    return this.runUndeclared.execute(input)
   }
 
   @Post('/raw')
@@ -211,5 +228,22 @@ describe('@Body(Dto) hydration', () => {
 
     expect(Object.keys(captured as object)).toEqual(['a'])
     expect(Object.getPrototypeOf(captured)).toBe(UndeclaredInput.prototype)
+  })
+
+  it('function-valued keys do not shadow methods when the DTO declares no @Field', async () => {
+    captured = undefined
+    const res = await post('/items/undeclared-usecase', {
+      name: 'x',
+      validate: 'pwned',
+      toString: 'x',
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ ok: true })
+    const dto = captured as Record<string, unknown>
+    expect(typeof dto.validate).toBe('function')
+    expect(Object.hasOwn(dto, 'validate')).toBe(false)
+    expect(Object.hasOwn(dto, 'toString')).toBe(false)
+    expect(dto.name).toBe('x')
   })
 })

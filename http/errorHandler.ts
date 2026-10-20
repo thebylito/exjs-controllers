@@ -32,7 +32,7 @@ export function resolveErrorStatus(error: unknown): number {
 
 /**
  * Error handler padrão: corpo JSON com mensagem fixa para 5xx (sem stack,
- * causa ou nome da classe) e a mensagem do erro para 4xx.
+ * causa, nome da classe ou `issues`) e a mensagem do erro (e `issues`) para 4xx.
  */
 export function createDefaultErrorHandler(): ErrorMiddleware {
   return function defaultErrorHandler(error, _request, response, next) {
@@ -50,7 +50,8 @@ export function createDefaultErrorHandler(): ErrorMiddleware {
     const body: ErrorResponseBody = {
       error: STATUS_CODES[status] ?? 'Error',
       message,
-      ...(Array.isArray(source.issues) ? { issues: source.issues } : {}),
+      // `issues` só em 4xx: num 5xx (ex.: ZodError cru) revelaria campos internos.
+      ...(status < 500 && Array.isArray(source.issues) ? { issues: source.issues } : {}),
     }
     response.status(status).json(body)
   }

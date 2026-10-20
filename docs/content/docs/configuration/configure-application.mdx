@@ -115,11 +115,11 @@ middlewares: [{ path: '/docs', handlers: [requireAdmin] }]
 
 ### `errorHandler`
 
-Standard Express 5 error handler `(error, request, response, next) => void`. Mounted last so it sees every framework error. A handler declared with fewer than 4 parameters throws at bootstrap, because Express would not treat it as an error handler.
+Standard Express 5 error handler `(error, request, response, next) => void`. Mounted last so it sees every framework error. A handler that does not declare exactly 4 parameters throws at bootstrap, before any route is registered, because Express would not treat it as an error handler.
 
 When `errorHandler` is omitted, `createDefaultErrorHandler()` is mounted (also exported from `exjs-controllers/http/errorHandler`, together with `resolveErrorStatus()`). It answers a JSON body `{ error, message, issues? }`:
 
-- 5xx always returns `message: 'Internal Server Error'`, with no stack and no internal message.
+- 5xx always returns `message: 'Internal Server Error'`, with no stack, no internal message and no `issues` (a raw `ZodError` thrown by your code is a 500 without its issues).
 - 4xx echoes `error.message`, so messages of 4xx errors thrown by your own code reach the client.
 - `MulterError` becomes `413` (`LIMIT_FILE_SIZE`) or `400`.
 - `UseCaseInputValidationError` becomes `422` with `issues`.

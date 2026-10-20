@@ -41,6 +41,14 @@ export async function configureApplication(
   app: Application,
   options: ExpressServerOptions,
 ): Promise<Application> {
+  // Validado antes de qualquer registro de rota, para que um bootstrap que falhe
+  // aqui possa ser refeito no mesmo processo sem "Rota duplicada".
+  if (options.errorHandler && options.errorHandler.length !== 4) {
+    throw new Error(
+      '[configureApplication] errorHandler precisa declarar exatamente 4 parâmetros (error, request, response, next); com outra aridade o Express o ignora.',
+    )
+  }
+
   const controllers = await resolveControllers(options)
   const openApiDocuments = shouldServeOpenApi(options)
     ? resolveOpenApiDocuments(controllers, options)
@@ -100,11 +108,6 @@ export async function configureApplication(
 
   registerControllersWithOptions(app, options, ...controllers)
 
-  if (options.errorHandler && options.errorHandler.length < 4) {
-    throw new Error(
-      '[configureApplication] errorHandler precisa declarar 4 parâmetros (error, request, response, next); com menos o Express o ignora.',
-    )
-  }
   app.use(options.errorHandler ?? createDefaultErrorHandler())
 
   return app
@@ -366,8 +369,8 @@ function resolveScalarConfigurationForRequest(
   }
 }
 
-// Host é controlado pelo cliente e a configuração do Scalar vai inline num <script>:
-// só aceitamos hostname/IPv6 com porta opcional.
+// Host (e X-Forwarded-Proto) são controlados pelo cliente e a configuração do
+// Scalar vai inline num <script>: só aceitamos hostname/IPv6 com porta opcional.
 const HOST_HEADER_PATTERN =
   /^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)(:\d{1,5})?$/
 
@@ -384,7 +387,15 @@ function resolveRequestOrigin(
     return undefined
   }
 
-  return `${request.protocol}://${host}`
+  // Sob `trust proxy`, `request.protocol` vem do X-Forwarded-Proto (controlável
+  // pelo cliente quando o proxy concatena): só aceitamos http/https.
+  const protocol = request.protocol
+
+  if (protocol !== 'http' && protocol !== 'https') {
+    return undefined
+  }
+
+  return `${protocol}://${host}`
 }
 
 async function resolveControllers(

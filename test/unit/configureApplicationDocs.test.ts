@@ -63,11 +63,17 @@ function getWithHost(
   base: string,
   path: string,
   host: string,
+  extraHeaders: Record<string, string> = {},
 ): Promise<{ status: number; body: string }> {
   const url = new URL(path, base)
   return new Promise((resolve, reject) => {
     const req = httpRequest(
-      { hostname: url.hostname, port: url.port, path: url.pathname, headers: { Host: host } },
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        headers: { Host: host, ...extraHeaders },
+      },
       (res) => {
         let body = ''
         res.setEncoding('utf8')
@@ -196,6 +202,31 @@ describe('configureApplication — documentos OpenAPI', () => {
 
     expect(res.status).toBe(200)
     expect(res.body).not.toContain('</script><script>alert')
+    expect(res.body).not.toContain('"servers": [')
+  })
+
+  it('não reflete um X-Forwarded-Proto hostil sob trust proxy', async () => {
+    app = createApplication()
+    app.express.set('trust proxy', true)
+    await configureApplication(app, {
+      controllers,
+      logger: false,
+      openapi: { documentation },
+      enableScalar: true,
+    })
+    const started = app
+    await new Promise<void>((resolve) => started.listen(0, resolve))
+    const address = started.address()
+    if (!address || typeof address === 'string') throw new Error('Servidor de teste sem porta TCP')
+    const base = `http://127.0.0.1:${address.port}`
+
+    const res = await getWithHost(base, '/docs', `127.0.0.1:${address.port}`, {
+      'X-Forwarded-Proto': '</script><script>alert(1)</script>',
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.body).not.toContain('</script><script>alert')
+    expect(res.body).not.toContain('"servers": [')
   })
 
   it('mantém servers[0].url com Host válido', async () => {

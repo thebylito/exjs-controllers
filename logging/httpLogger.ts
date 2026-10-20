@@ -102,8 +102,12 @@ export function createHttpLoggerMiddleware(
 
   return (request, response, next) => {
     const ctx = ensureHttpContext(request, response)
-    // Bytes já lidos no socket (keep-alive) antes deste request começar.
-    const bytesReadAtStart = ctx.request.socket?.bytesRead ?? 0
+    // Capturados na entrada: após um abort do cliente, no `close` o socket já
+    // não tem endereço e `request.ip` vira `undefined`.
+    const addresses: LoggedAddresses = {
+      remoteIp: resolveRemoteIp(ctx.request, remoteIpHeaders),
+      serverIp: ctx.response.socket?.localAddress ?? ctx.request.ip ?? '-',
+    }
     const correlationId = resolveCorrelationId(
       ctx.request,
       correlationIdHeaderName,
@@ -125,16 +129,21 @@ export function createHttpLoggerMiddleware(
             ctx.request,
             ctx.response,
             requestContext,
-            bytesReadAtStart,
-            remoteIpHeaders,
+            addresses,
             logQueryString,
           ),
         )
       } catch (err) {
-        requestContext.logger.warn(
-          { err },
-          '[httpLogger] failed to write the access log',
-        )
+        // O próprio stream pode estar lançando (ENOSPC, stream customizado):
+        // o aviso também não pode escapar do listener.
+        try {
+          requestContext.logger.warn(
+            { err },
+            '[httpLogger] failed to write the access log',
+          )
+        } catch {
+          // nunca propaga
+        }
       }
     }
 
@@ -396,12 +405,16 @@ function isHttpRequestPayload(value: unknown): value is HttpRequestLogPayload {
   return typeof value === 'object' && value !== null
 }
 
+interface LoggedAddresses {
+  remoteIp: string
+  serverIp: string
+}
+
 function buildHttpLogPayload(
   request: HttpRequest,
   response: HttpResponse,
   context: Pick<RequestLogContext, 'traceId' | 'spanId'>,
-  bytesReadAtStart: number,
-  remoteIpHeaders: string[],
+  addresses: LoggedAddresses,
   logQueryString: boolean,
 ): HttpLogPayload {
   return {
@@ -410,11 +423,11 @@ function buildHttpLogPayload(
     httpRequest: {
       requestMethod: request.method || 'GET',
       requestUrl: resolveRequestUrl(request, logQueryString),
-      requestSize: resolveRequestSize(request, bytesReadAtStart),
+      requestSize: resolveRequestSize(request),
       status: String(response.statusCode),
       userAgent: getRequestHeader(request, 'user-agent'),
-      remoteIp: resolveRemoteIp(request, remoteIpHeaders),
-      serverIp: response.socket?.localAddress ?? request.ip ?? '-',
+      remoteIp: addresses.remoteIp,
+      serverIp: addresses.serverIp,
       referrer: resolveReferrer(request, logQueryString),
     },
   }
@@ -455,32 +468,15 @@ function resolveRemoteIp(
     return edgeClientIp
   }
 
-  const forwardedFor = getHeaderValue(request.get('x-forwarded-for'))
-  const firstForwardedHop = forwardedFor?.split(',')[0]?.trim()
-
-  return (
-    request.ip ||
-    (firstForwardedHop ? firstForwardedHop : undefined) ||
-    request.socket?.remoteAddress ||
-    '-'
-  )
+  // Sem fallback para o X-Forwarded-For cru: `request.ip` já o respeita quando
+  // `trust proxy` está configurado; fora disso ele é forjável pelo cliente.
+  return request.ip || request.socket?.remoteAddress || '-'
 }
 
-function resolveRequestSize(
-  request: HttpRequest,
-  bytesReadAtStart: number,
-): string {
-  const contentLength = getHeaderValue(request.get('content-length'))
-  if (contentLength) {
-    return contentLength
-  }
-
+function resolveRequestSize(request: HttpRequest): string {
+  // Só o Content-Length declarado; sem ele o tamanho é desconhecido ('-').
   // Nunca serializa `request.body`: com multipart ele pode ser enorme/esparso.
-  if (request.socket) {
-    return String(Math.max(0, (request.socket.bytesRead ?? 0) - bytesReadAtStart))
-  }
-
-  return '0'
+  return getHeaderValue(request.get('content-length')) || '-'
 }
 
 function stripQueryString(value: string): string {

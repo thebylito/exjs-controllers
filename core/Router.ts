@@ -404,10 +404,13 @@ function hydrateBodyArg(
 
   // Copia só chaves próprias e declaradas, por atribuição simples: nunca
   // Object.assign com o body cru (mass assignment / troca de protótipo).
+  // Chaves que já são métodos na instância (`validate`, `merge`, `toString`,
+  // `hasOwnProperty`...) também ficam de fora, para não sombrear o método.
   const instance = new SchemaClass() as Record<string, unknown>
   const source = body as Record<string, unknown>
   for (const key of Object.keys(source)) {
     if (FORBIDDEN_BODY_KEYS.has(key)) continue
+    if (typeof instance[key] === 'function') continue
     if (declaredKeys !== null && !declaredKeys.has(key)) continue
     instance[key] = source[key]
   }

@@ -11,6 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - **Verbo HTTP `QUERY` com o decorator `@QueryMethod(path, options?)`.** Registra a rota com `app.query` do Express (que monta os métodos a partir de `http.METHODS`; o Node tem `QUERY` desde a 22.0, coberto pelo `engines >=22`). O body é lido e hidratado como no `@Post`, então `@Body(Dto)` e `inputClass` funcionam igual. `Application` ganha `query(path, ...handlers)` e `register` aceita `'query'`.
+- **Limites de upload exportados**: `DEFAULT_UPLOAD_LIMITS` e `resolveUploadLimits` em `exjs-controllers/core/uploadLimits`.
+- **Error handler padrão exportado**: `createDefaultErrorHandler`, `resolveErrorStatus` e o tipo `ErrorResponseBody` em `exjs-controllers/http/errorHandler`.
+- **`CORRELATION_ID_PATTERN`** (`exjs-controllers/logging/httpLogger`): a regex que um correlation id recebido precisa casar para ser aceito.
+- **Opções do logger `remoteIpHeaders`** (headers de IP do cliente preenchidos por um proxy de borda confiável; padrão `[]`) **e `logQueryString`** (mantém a query string em `requestUrl`/`referrer`; padrão `false`).
 
 ### Changed
 
@@ -18,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **O Scalar passa a carregar uma versão fixa do bundle** (`@scalar/api-reference@1.75.0`, exportada como `DEFAULT_SCALAR_CDN`). Antes a página apontava para `https://cdn.jsdelivr.net/npm/@scalar/api-reference` sem versão, ou seja, a última publicada, e a UI podia mudar ou quebrar a cada release do Scalar sem nenhuma mudança na lib. A nova opção `scalar.cdn` troca a URL (outra versão ou cópia self-hosted).
 - **Breaking: `hasAuthorizedDecorator` foi renomeado para `requirePrincipal`** em `createAuthenticationMiddleware` (quem usa a lib via `configureApplication` não é afetado).
 - **Error handler padrão** montado quando `errorHandler` é omitido (veja `### Security`); a resposta de erro passa a ser JSON `{ error, message, issues? }`.
-- **Defaults do logger**: `remoteIpHeaders` é `[]` e `logQueryString` é `false`; `requestUrl` vem de `originalUrl` e `requestSize` sem `Content-Length` conta os bytes lidos do socket.
+- **Defaults do logger**: `remoteIpHeaders` é `[]` e `logQueryString` é `false`; `requestUrl` vem de `originalUrl`; `requestSize` é o `Content-Length` declarado ou `-` quando ele não existe; `remoteIp` segue `remoteIpHeaders` → `request.ip` → endereço do socket, sem ler o `X-Forwarded-For` cru, e `remoteIp`/`serverIp` são capturados na entrada do request.
 - **`@Body(Dto)` hidrata só as chaves declaradas com `@Field`**, e `validate()` aplica transformações, `.default()` e `z.coerce` na instância.
 - **Documentação**: `inputClass` só documenta o body no OpenAPI; `{ singleton: false }` cria uma instância por resolução (não existe escopo de request); `/docs` e o JSON OpenAPI são públicos por padrão.
 
@@ -26,12 +30,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **`multer` atualizado para `^2.4.0`** ([GHSA-3pph-fpjx-jg34](https://github.com/advisories/GHSA-3pph-fpjx-jg34)): nas versões `>=2.2.0 <2.4.0`, uploads abortados deixavam gravações órfãs em disco, permitindo negação de serviço.
 - **Limites padrão do multer em toda rota de upload.** `fileSize` 16 MiB, `files` 10 (por requisição), `fields` 100, `parts` 200, `fieldNameSize` 100, `fieldSize` 1 MiB, `headerPairs` 2000, `fieldNestingDepth` 5 e `fieldArrayIndexLimit` 100 (`DEFAULT_UPLOAD_LIMITS`, `resolveUploadLimits`). `options.limits` sobrescreve chave a chave e agora aceita `fieldNestingDepth`/`fieldArrayIndexLimit`. Estouros respondem 413 (`LIMIT_FILE_SIZE`) ou 400.
-- **Error handler padrão.** Sem `errorHandler`, a lib monta `createDefaultErrorHandler()`: 5xx sempre `Internal Server Error` (sem stack nem mensagem interna), 4xx ecoam `error.message`, `MulterError` vira 413/400 e `UseCaseInputValidationError` vira 422 com `issues`. Um `errorHandler` com menos de 4 parâmetros agora lança no bootstrap.
+- **Error handler padrão.** Sem `errorHandler`, a lib monta `createDefaultErrorHandler()`: 5xx sempre `Internal Server Error` (sem stack nem mensagem interna), 4xx ecoam `error.message`, `MulterError` vira 413/400 e `UseCaseInputValidationError` vira 422 com `issues` (`issues` só vai em 4xx: um `ZodError` cru responde 500 sem eles). Um `errorHandler` que não declare exatamente 4 parâmetros agora lança no bootstrap, antes de registrar qualquer rota.
 - **Autenticação.** Exceção lançada por `currentUserChecker` responde 401 com a mensagem fixa `Unauthorized` (o erro original fica em `cause`); `{ principal: null }` conta como não autenticado; rota com `@CurrentUser()`/`@CurrentApiKey()` obrigatório rejeita anônimos com 401 antes de o multer ler o body; aplicar `@Authorized` duas vezes ao mesmo método lança na definição da classe.
 - **Decorators TC39 não mutam mais a classe pai.** Com `experimentalDecorators: false`, `@Authorized`, `@Get`/`@Post`/… e `@Field` em uma subclasse alteravam as permissões, rotas e schema da classe pai; agora a subclasse recebe a própria cópia.
-- **DTOs.** `@Body(Dto)` copia só as chaves declaradas com `@Field` (chaves não declaradas são descartadas; `__proto__`, `constructor` e `prototype` são sempre ignoradas) e `validate()` grava o resultado do parse do Zod na instância.
-- **Logger.** Os headers `CF-Connecting-IP`/`True-Client-IP` deixam de ser confiáveis (opção `remoteIpHeaders`), a query string e o fragmento saem de `requestUrl` e `referrer` (opção `logQueryString`), o body nunca é serializado para calcular `requestSize`, correlation ids recebidos precisam casar com `CORRELATION_ID_PATTERN` e uma falha ao gravar o log de acesso vira warning em vez de derrubar o processo.
-- **Scalar.** O header `Host` é validado antes de virar a URL do servidor (defina `scalar.servers` para fixá-la).
+- **DTOs.** `@Body(Dto)` copia só as chaves declaradas com `@Field` (chaves não declaradas são descartadas; `__proto__`, `constructor` e `prototype` são sempre ignoradas, assim como chaves que já são métodos da instância, como `validate` ou `toString`) e `validate()` grava o resultado do parse do Zod na instância.
+- **Logger.** Os headers `CF-Connecting-IP`/`True-Client-IP` deixam de ser confiáveis (opção `remoteIpHeaders`), a query string e o fragmento saem de `requestUrl` e `referrer` (opção `logQueryString`), o body nunca é serializado para calcular `requestSize`, o `X-Forwarded-For` cru deixa de ser usado como `remoteIp` (um cliente que abortava a conexão conseguia registrar um IP forjado), correlation ids recebidos precisam casar com `CORRELATION_ID_PATTERN` e uma falha ao gravar o log de acesso vira warning (e uma falha do próprio warning é engolida) em vez de derrubar o processo.
+- **Scalar.** O header `Host` é validado e o protocolo (que sob `trust proxy` vem do `X-Forwarded-Proto`) precisa ser `http` ou `https` antes de virar a URL do servidor; senão a página sai sem `servers` (defina `scalar.servers` para fixá-la).
 - **Uploads em `diskStorage`** têm os arquivos apagados quando o handler lança.
 
 ## [0.11.1] — 2026-09-06

@@ -13,6 +13,10 @@ changelog, commit and push a tag.
 - Push access to `main`.
 - One-time: the npm Trusted Publisher for this repo (see [One-time setup](#one-time-setup-npm-trusted-publisher)).
   No npm token or `npm login` is needed locally.
+- One-time, **before the first tag**: the GitHub environment `npm` with a required
+  reviewer (see [GitHub `npm` environment](#one-time-setup-github-npm-environment)).
+  If it does not exist when a tag is pushed, GitHub creates it on the fly with no
+  protection rules and `publish` runs without any approval.
 
 ---
 
@@ -112,7 +116,9 @@ git tag v0.X.Y
 git push origin main --tags
 ```
 
-Pushing the tag triggers the release workflow.
+Pushing the tag triggers the release workflow. Before the first tag, confirm that
+**Settings** → **Environments** lists `npm` with a required reviewer; otherwise
+the release publishes without review.
 
 ---
 
@@ -122,13 +128,23 @@ Pushing the tag triggers the release workflow.
 gh run watch
 ```
 
-or open the **Actions** tab on GitHub. The workflow:
+or open the **Actions** tab on GitHub. The workflow runs two jobs:
 
-1. Checks that the tag matches `package.json` `version`.
-2. Extracts the CHANGELOG section for the version (fails if absent).
-3. Runs `yarn install --immutable`, `yarn build`, `yarn test`.
-4. Publishes to npm with provenance via Trusted Publishing (OIDC).
-5. Creates the GitHub Release `v0.X.Y` with the changelog notes and the `.tgz` tarball attached.
+1. **`build`** (read-only permissions, no publish rights):
+   1. Checks that the tag matches `package.json` `version`.
+   2. Extracts the CHANGELOG section for the version (fails if absent).
+   3. Runs `yarn install --immutable`, `yarn build`, `yarn test`.
+   4. Packs the tarball, runs `npm publish --dry-run` on it and uploads the
+      tarball and the release notes as a workflow artifact.
+2. **`publish`** (in the protected `npm` environment), which **waits for approval**:
+   the run shows "Waiting for review" on the `publish` job. Open the run, click
+   **Review deployments**, tick `npm` and click **Approve and deploy**. Only then
+   does the job get its OIDC token and:
+   1. Publishes the prebuilt tarball to npm with provenance via Trusted Publishing (OIDC).
+   2. Creates the GitHub Release `v0.X.Y` with the changelog notes and the `.tgz` tarball attached.
+
+If `publish` starts without waiting for approval, the `npm` environment is
+missing its required reviewer: fix it before the next release.
 
 Expected result: `npm view exjs-controllers version` prints the new version and
 the release appears under **Releases** on GitHub.
@@ -137,8 +153,8 @@ the release appears under **Releases** on GitHub.
 
 ## If the release fails
 
-- **Before "Publish to npm"** (tag mismatch, missing changelog, failing tests):
-  nothing was published. Fix the problem, then move the tag:
+- **Before "Publish to npm"** (tag mismatch, missing changelog, failing tests in
+  `build`, or the `publish` approval rejected): nothing was published. Fix the problem, then move the tag:
 
   ```bash
   git tag -d v0.X.Y
@@ -171,12 +187,20 @@ Done once per package; lets the workflow publish without any token.
 
 ### One-time setup: GitHub `npm` environment
 
-The `publish` job runs in a GitHub environment named `npm`, which must match the
-Trusted Publisher environment name above.
+The `publish` job runs in a GitHub environment named `npm`. Its name must match
+the Trusted Publisher's environment name above exactly (case-sensitive), or the
+OIDC publish is rejected.
+
+**Create it before pushing the first tag.** A workflow that references an
+environment that does not exist makes GitHub create it automatically with no
+protection rules, so `publish` would run without any approval.
 
 1. In the repository go to **Settings** → **Environments** → **New environment** and name it `npm`.
 2. Add the maintainer as a **Required reviewer**.
-3. Optional: under deployment branches and tags, allow only `v*` tags.
+3. Leave **Prevent self-review** OFF when you are the only maintainer: the person
+   who pushed the tag is then the only possible reviewer, and with self-review
+   blocked the release can never be approved.
+4. Optional: under deployment branches and tags, allow only `v*` tags.
 
 After a tag is pushed, `build` runs the tests and packs the tarball with
 read-only permissions. The `publish` job then waits for the reviewer's approval
@@ -211,6 +235,8 @@ npm publish
 [ ] README.md updated if public API changed
 [ ] yarn typecheck && yarn clean && yarn build && yarn test pass locally
 [ ] git commit with descriptive message
+[ ] GitHub environment `npm` exists with a required reviewer (before the first tag)
 [ ] git tag v0.X.Y created and pushed (git push origin main --tags)
+[ ] `publish` job approved in the `npm` environment
 [ ] Release workflow green; npm version and GitHub Release visible
 ```

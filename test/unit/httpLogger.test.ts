@@ -204,7 +204,7 @@ describe('createHttpLoggerMiddleware', () => {
     expect(payload.httpRequest.referrer).toBe('https://x.test/a?b=1')
   })
 
-  it('cai para o primeiro hop do X-Forwarded-For quando request.ip está ausente', async () => {
+  it('não usa X-Forwarded-For cru: sem request.ip cai para socket.remoteAddress', async () => {
     const chunk = await captureLog(
       buildRequest({
         ip: undefined,
@@ -215,7 +215,44 @@ describe('createHttpLoggerMiddleware', () => {
     const payload = JSON.parse(chunk) as {
       httpRequest: { remoteIp: string }
     }
-    expect(payload.httpRequest.remoteIp).toBe('203.0.113.10')
+    expect(payload.httpRequest.remoteIp).toBe('172.16.0.9')
+    expect(chunk).not.toContain('203.0.113.10')
+  })
+
+  it('mantém o remoteIp capturado na entrada quando o socket já fechou no close', async () => {
+    const chunks: string[] = []
+    const testLogger = pino(
+      { base: undefined, timestamp: false },
+      {
+        write(chunk: string) {
+          chunks.push(chunk)
+          return true
+        },
+      },
+    )
+    const middleware = createHttpLoggerMiddleware({
+      logger: testLogger,
+      genCorrelationId: () => 'some_uuid',
+    })
+    const request = buildRequest({
+      headers: { 'x-forwarded-for': '6.6.6.6' },
+    }) as any
+    const response = new FakeResponse() as any
+    await middleware(request, response, () => {
+      // Cliente abortou: Node/Express já não sabem o endereço no `close`.
+      request.ip = undefined
+      request.socket.remoteAddress = undefined
+      response.socket = undefined
+      response.emit('close')
+    })
+
+    expect(chunks).toHaveLength(1)
+    const payload = JSON.parse(chunks[0]) as {
+      httpRequest: { remoteIp: string; serverIp: string }
+    }
+    expect(payload.httpRequest.remoteIp).toBe('10.0.0.5')
+    expect(payload.httpRequest.serverIp).toBe('192.168.0.1')
+    expect(chunks[0]).not.toContain('6.6.6.6')
   })
 
   it('cai para socket.remoteAddress sem request.ip nem X-Forwarded-For', async () => {
@@ -290,10 +327,9 @@ describe('createHttpLoggerMiddleware — hardening', () => {
     return { lines, middleware }
   }
 
-  it('calcula requestSize pelo bytesRead do socket sem serializar o body', async () => {
+  it('requestSize é "-" sem Content-Length e nunca serializa o body', async () => {
     const { lines, middleware } = build()
     const request = buildRequest() as any
-    request.socket.bytesRead = 100
     request.body = {
       toJSON() {
         throw new Error('must not stringify')
@@ -301,25 +337,41 @@ describe('createHttpLoggerMiddleware — hardening', () => {
     }
     const response = new FakeResponse()
     await middleware(request, response as never, () => {
-      request.socket.bytesRead = 1334
       response.emit('close')
     })
 
     expect(lines).toHaveLength(1)
-    expect(lines[0].httpRequest.requestSize).toBe('1234')
+    expect(lines[0].httpRequest.requestSize).toBe('-')
   })
 
-  it('não conta bytes do request anterior no mesmo socket (keep-alive)', async () => {
+  it('requestSize usa o Content-Length quando presente', async () => {
     const { lines, middleware } = build()
-    const request = buildRequest() as any
-    request.socket.bytesRead = 5000
+    const request = buildRequest({ headers: { 'content-length': '1234' } }) as any
     const response = new FakeResponse()
     await middleware(request, response as never, () => {
-      request.socket.bytesRead = 5300
       response.emit('close')
     })
 
-    expect(lines[0].httpRequest.requestSize).toBe('300')
+    expect(lines[0].httpRequest.requestSize).toBe('1234')
+  })
+
+  it('não propaga exceção quando o stream de log lança (info e warn falham)', async () => {
+    const middleware = createHttpLoggerMiddleware({
+      genCorrelationId: () => 'some_uuid',
+      stream: {
+        write() {
+          throw new Error('ENOSPC')
+        },
+      },
+    })
+    const response = new FakeResponse()
+    let emitted = false
+    await middleware(buildRequest() as never, response as never, () => {
+      expect(() => response.emit('close')).not.toThrow()
+      emitted = true
+    })
+
+    expect(emitted).toBe(true)
   })
 
   it('não propaga exceção quando montar o payload falha', async () => {

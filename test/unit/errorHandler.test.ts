@@ -48,6 +48,11 @@ class ErrorsController {
     return this.createItem.execute(input)
   }
 
+  @Get('/zod')
+  zod() {
+    return z.object({ dbPassword: z.string().min(20) }).parse({ dbPassword: 'x' })
+  }
+
   @Get('/partial')
   partial(@Res() res: any) {
     res.write('partial')
@@ -156,6 +161,17 @@ describe('default error handler (app sem errorHandler)', () => {
     expect(Array.isArray(body.issues)).toBe(true)
   })
 
+  it('ZodError cru (500) não expõe issues', async () => {
+    await boot()
+    const res = await fetch(`${baseUrl}/e/zod`)
+    const text = await res.text()
+    expect(res.status).toBe(500)
+    const body = JSON.parse(text)
+    expect(body).toEqual({ error: 'Internal Server Error', message: 'Internal Server Error' })
+    expect(body).not.toHaveProperty('issues')
+    expect(text).not.toContain('dbPassword')
+  })
+
   it('401 responde { error: "Unauthorized", message: "Unauthorized" }', async () => {
     await boot()
     const res = await fetch(`${baseUrl}/e/unauthorized`)
@@ -206,13 +222,31 @@ describe('default error handler (app sem errorHandler)', () => {
     expect(await res.json()).toEqual({ custom: true })
   })
 
-  it('errorHandler com 3 parâmetros falha no bootstrap', async () => {
+  it('errorHandler com 3 parâmetros falha no bootstrap antes de registrar rotas', async () => {
     const instance = createApplication()
     await expect(
       configureApplication(instance, {
         controllers: [ErrorsController],
         logger: false,
         errorHandler: ((_e: any, _req: any, _res: any) => {}) as any,
+      }),
+    ).rejects.toThrow(/4 parâmetros/)
+
+    // Sem _resetRoutesForTests: o bootstrap pode ser refeito no mesmo processo.
+    await expect(
+      configureApplication(createApplication(), {
+        controllers: [ErrorsController],
+        logger: false,
+      }),
+    ).resolves.toBeDefined()
+  })
+
+  it('errorHandler com 5 parâmetros falha no bootstrap', async () => {
+    await expect(
+      configureApplication(createApplication(), {
+        controllers: [ErrorsController],
+        logger: false,
+        errorHandler: ((_e: any, _req: any, _res: any, _next: any, _extra: any) => {}) as any,
       }),
     ).rejects.toThrow(/4 parâmetros/)
   })
