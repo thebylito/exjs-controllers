@@ -9,6 +9,7 @@ import {
   ForbiddenError,
 } from '#exjs-controllers/core/authentication/errors'
 import type { ResolvedPrincipal } from '#exjs-controllers/core/authentication/types'
+import { resolveUploadLimits } from '#exjs-controllers/core/uploadLimits'
 import type { ExpressServerOptions } from '#exjs-controllers/config/expressServerOptions'
 import type { Application } from '#exjs-controllers/http/application'
 import { ensureHttpContext, type Handler } from '#exjs-controllers/http/httpTypes'
@@ -228,7 +229,10 @@ function resolveUploadMiddleware(params: ParamMetadata[]): Handler | undefined {
   const rawOptions = uploadParam.uploadOptions?.options
   const resolvedOptions =
     typeof rawOptions === 'function' ? rawOptions() : rawOptions
-  const instance = multer((resolvedOptions ?? {}) as MulterOptions)
+  const instance = multer({
+    ...(resolvedOptions ?? {}),
+    limits: resolveUploadLimits(resolvedOptions?.limits),
+  } as MulterOptions)
 
   return uploadParam.type === 'uploaded-files'
     ? instance.array(uploadParam.name)

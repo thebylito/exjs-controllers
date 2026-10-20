@@ -46,6 +46,8 @@ export interface MulterUploadOptions {
     files?: number
     parts?: number
     headerPairs?: number
+    fieldNestingDepth?: number
+    fieldArrayIndexLimit?: number
   }
   fileFilter?: (
     req: unknown,
