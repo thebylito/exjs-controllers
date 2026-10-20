@@ -16,3 +16,8 @@ docs/.source
 docs/out
 docs/tsconfig.tsbuildinfo
 docs/.yarn/
+
+# Claude Code: artefatos locais de agente (planos, specs, worktrees)
+.claude/superpowers/
+.claude/worktrees/
+.claude/settings.local.json
