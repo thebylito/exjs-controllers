@@ -131,3 +131,59 @@ describe('upload limits — defaults', () => {
     expect(bad.body.code).toBe('LIMIT_FIELD_ARRAY_INDEX')
   })
 })
+
+describe('upload limits — logger ativo (uploads-2)', () => {
+  it('request multipart chunked com arr[150000000] e logger ativo não gera uncaughtException', async () => {
+    // Reconfigura o app com o log de acesso ligado (o beforeEach usa logger: false).
+    const previous = app
+    app = undefined
+    if (previous) await new Promise<void>((resolve) => previous.close(() => resolve()))
+
+    const sink = { write: () => true }
+    _resetRoutesForTests()
+    app = createApplication()
+    await configureApplication(app, {
+      controllers: [UploadController],
+      logger: { stream: sink },
+      errorHandler: (error: any, _request, response, _next) => {
+        response.status(400).json({ code: error.code ?? error.name })
+      },
+    })
+    const started = app
+    await new Promise<void>((resolve) => started.listen(0, resolve))
+    const address = started.address()
+    if (!address || typeof address === 'string') throw new Error('Servidor de teste sem porta TCP')
+    baseUrl = `http://127.0.0.1:${address.port}`
+
+    const uncaught: unknown[] = []
+    const previousListeners = process.listeners('uncaughtException')
+    process.removeAllListeners('uncaughtException')
+    process.on('uncaughtException', (error) => uncaught.push(error))
+    try {
+      const body = Buffer.concat([
+        fieldPart('arr[150000000]', 'x'),
+        Buffer.from(`--${BOUNDARY}--\r\n`),
+      ])
+      // Corpo em stream => Transfer-Encoding: chunked, sem content-length.
+      const response = await fetch(`${baseUrl}/up/one`, {
+        method: 'POST',
+        headers: { 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array(body))
+            controller.close()
+          },
+        }),
+        duplex: 'half',
+      } as RequestInit)
+      expect(response.status).toBe(400)
+      await response.text()
+
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      expect(uncaught).toEqual([])
+    } finally {
+      process.removeAllListeners('uncaughtException')
+      for (const listener of previousListeners) process.on('uncaughtException', listener)
+    }
+  })
+})

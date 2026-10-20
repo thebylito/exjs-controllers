@@ -71,6 +71,8 @@ export interface HttpLoggerOptions {
   filePath?: string
 }
 
+export const CORRELATION_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/
+
 export function createHttpLoggerMiddleware(
   options: HttpLoggerOptions = {},
 ): Handler {
@@ -83,6 +85,8 @@ export function createHttpLoggerMiddleware(
 
   return (request, response, next) => {
     const ctx = ensureHttpContext(request, response)
+    // Bytes já lidos no socket (keep-alive) antes deste request começar.
+    const bytesReadAtStart = ctx.request.socket?.bytesRead ?? 0
     const correlationId = resolveCorrelationId(
       ctx.request,
       correlationIdHeaderName,
@@ -95,10 +99,24 @@ export function createHttpLoggerMiddleware(
 
     ctx.response.setHeader('x-correlation-id', correlationId)
 
+    // Roda num listener de `close`, fora do caminho de erros do Express: uma
+    // exceção aqui derrubaria o processo, então nunca pode propagar.
     const writeLog = () => {
-      requestContext.logger.info(
-        buildHttpLogPayload(ctx.request, ctx.response, requestContext),
-      )
+      try {
+        requestContext.logger.info(
+          buildHttpLogPayload(
+            ctx.request,
+            ctx.response,
+            requestContext,
+            bytesReadAtStart,
+          ),
+        )
+      } catch (err) {
+        requestContext.logger.warn(
+          { err },
+          '[httpLogger] failed to write the access log',
+        )
+      }
     }
 
     ctx.response.once('close', writeLog)
@@ -363,6 +381,7 @@ function buildHttpLogPayload(
   request: HttpRequest,
   response: HttpResponse,
   context: Pick<RequestLogContext, 'traceId' | 'spanId'>,
+  bytesReadAtStart: number,
 ): HttpLogPayload {
   return {
     ...(context.traceId ? { traceId: context.traceId } : {}),
@@ -370,7 +389,7 @@ function buildHttpLogPayload(
     httpRequest: {
       requestMethod: request.method || 'GET',
       requestUrl: request.url || request.path,
-      requestSize: resolveRequestSize(request),
+      requestSize: resolveRequestSize(request, bytesReadAtStart),
       status: String(response.statusCode),
       userAgent: getRequestHeader(request, 'user-agent'),
       remoteIp: resolveRemoteIp(request),
@@ -385,12 +404,20 @@ function resolveCorrelationId(
   correlationIdHeaderName: string,
   genCorrelationId: () => string,
 ): string {
-  return (
-    getHeaderValue(request.get(correlationIdHeaderName)) ??
-    getHeaderValue(request.get('x-request-id')) ??
-    getHeaderValue(request.get('x-transaction-id')) ??
-    genCorrelationId()
-  )
+  // Valores fora do padrão (tamanho, caracteres de controle) são tratados como
+  // ausentes, evitando log injection e response splitting via header.
+  for (const headerName of [
+    correlationIdHeaderName,
+    'x-request-id',
+    'x-transaction-id',
+  ]) {
+    const value = getHeaderValue(request.get(headerName))
+    if (value !== undefined && CORRELATION_ID_PATTERN.test(value)) {
+      return value
+    }
+  }
+
+  return genCorrelationId()
 }
 
 function resolveRemoteIp(request: HttpRequest): string {
@@ -417,18 +444,18 @@ function resolveRemoteIp(request: HttpRequest): string {
   )
 }
 
-function resolveRequestSize(request: HttpRequest): string {
+function resolveRequestSize(
+  request: HttpRequest,
+  bytesReadAtStart: number,
+): string {
   const contentLength = getHeaderValue(request.get('content-length'))
   if (contentLength) {
     return contentLength
   }
 
-  if (typeof request.body === 'string') {
-    return Buffer.byteLength(request.body).toString()
-  }
-
-  if (request.body && typeof request.body === 'object') {
-    return Buffer.byteLength(JSON.stringify(request.body)).toString()
+  // Nunca serializa `request.body`: com multipart ele pode ser enorme/esparso.
+  if (request.socket) {
+    return String(Math.max(0, (request.socket.bytesRead ?? 0) - bytesReadAtStart))
   }
 
   return '0'

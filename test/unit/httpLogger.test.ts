@@ -3,7 +3,10 @@ import { EventEmitter } from 'node:events'
 import pino from 'pino'
 import { describe, expect, it } from 'vitest'
 
-import { createHttpLoggerMiddleware } from '#exjs-controllers/logging/httpLogger'
+import {
+  CORRELATION_ID_PATTERN,
+  createHttpLoggerMiddleware,
+} from '#exjs-controllers/logging/httpLogger'
 import {
   captureRequestTraceContext,
   logger,
@@ -35,7 +38,7 @@ function buildRequest(
     path: '/some-path',
     url: '/some-path',
     ip: 'ip' in overrides ? overrides.ip : '10.0.0.5',
-    socket: { remoteAddress: '172.16.0.9' },
+    socket: { remoteAddress: '172.16.0.9', bytesRead: 0 },
     get(header: string) {
       return headers[header.toLowerCase()]
     },
@@ -206,5 +209,108 @@ describe('createHttpLoggerMiddleware', () => {
     expect(chunks.some((c) => c.includes('mensagem debug'))).toBe(false)
     // o log de acesso (info, emitido no close) ainda sai.
     expect(chunks.some((c) => c.includes('httpRequest'))).toBe(true)
+  })
+})
+
+describe('createHttpLoggerMiddleware — hardening', () => {
+  function build(genId = () => 'some_uuid') {
+    const lines: Array<Record<string, any>> = []
+    const testLogger = pino(
+      { base: undefined, timestamp: false },
+      {
+        write(chunk: string) {
+          lines.push(JSON.parse(chunk))
+          return true
+        },
+      },
+    )
+    const middleware = createHttpLoggerMiddleware({
+      logger: testLogger,
+      genCorrelationId: genId,
+    })
+    return { lines, middleware }
+  }
+
+  it('calcula requestSize pelo bytesRead do socket sem serializar o body', async () => {
+    const { lines, middleware } = build()
+    const request = buildRequest() as any
+    request.socket.bytesRead = 100
+    request.body = {
+      toJSON() {
+        throw new Error('must not stringify')
+      },
+    }
+    const response = new FakeResponse()
+    await middleware(request, response as never, () => {
+      request.socket.bytesRead = 1334
+      response.emit('close')
+    })
+
+    expect(lines).toHaveLength(1)
+    expect(lines[0].httpRequest.requestSize).toBe('1234')
+  })
+
+  it('não conta bytes do request anterior no mesmo socket (keep-alive)', async () => {
+    const { lines, middleware } = build()
+    const request = buildRequest() as any
+    request.socket.bytesRead = 5000
+    const response = new FakeResponse()
+    await middleware(request, response as never, () => {
+      request.socket.bytesRead = 5300
+      response.emit('close')
+    })
+
+    expect(lines[0].httpRequest.requestSize).toBe('300')
+  })
+
+  it('não propaga exceção quando montar o payload falha', async () => {
+    const { lines, middleware } = build()
+    const base = buildRequest()
+    const request = {
+      ...base,
+      get(header: string) {
+        if (header.toLowerCase() === 'user-agent') {
+          throw new Error('boom')
+        }
+        return base.get(header)
+      },
+    }
+    const response = new FakeResponse()
+    await middleware(request as never, response as never, () => {
+      expect(() => response.emit('close')).not.toThrow()
+    })
+
+    const warnLines = lines.filter((line) => line.level === 40)
+    expect(warnLines).toHaveLength(1)
+    expect(warnLines[0].msg).toBe('[httpLogger] failed to write the access log')
+  })
+
+  it('ignora correlation id inválido (>128 chars ou fora de [A-Za-z0-9._:-]) e gera um novo', async () => {
+    for (const invalidId of ['a'.repeat(129), 'bad id\nwith spaces']) {
+      const { lines, middleware } = build()
+      const request = buildRequest({
+        headers: { 'x-correlation-id': invalidId },
+      })
+      const response = new FakeResponse()
+      await middleware(request as never, response as never, () => {
+        response.emit('close')
+      })
+
+      expect(lines[0].correlationId).not.toBe(invalidId)
+      expect(lines[0].correlationId).toBe('some_uuid')
+      expect(response.getHeader('x-correlation-id')).toMatch(
+        CORRELATION_ID_PATTERN,
+      )
+    }
+  })
+
+  it('aceita correlation id válido vindo do header', async () => {
+    const { lines, middleware } = build()
+    const request = buildRequest({ headers: { 'x-correlation-id': 'abc-1.2:3_4' } })
+    const response = new FakeResponse()
+    await middleware(request as never, response as never, () => {
+      response.emit('close')
+    })
+    expect(lines[0].correlationId).toBe('abc-1.2:3_4')
   })
 })
