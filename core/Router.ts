@@ -421,6 +421,8 @@ function resolveAuthenticationHandler(
     authentication: serverOptions.authentication,
     requiredPermissions: authorization?.permissions ?? [],
     allowedKinds: authorization?.kinds,
-    hasAuthorizedDecorator,
+    // Fail-closed: @Authorized ou qualquer @CurrentUser/@CurrentApiKey não opcional exige principal.
+    requirePrincipal:
+      hasAuthorizedDecorator || principalParams.some(p => p.optional !== true),
   })
 }

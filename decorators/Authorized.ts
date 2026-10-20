@@ -37,13 +37,21 @@ export function Authorized(
   ): void {
     if (isStandardMethodDecoratorContext(ctxOrKey)) {
       const metadata = ctxOrKey.metadata as Record<symbol, unknown>
+      const ownedBefore = Object.hasOwn(metadata, AUTHORIZATION_METADATA)
       const authorizationMap = ownMetadataEntry(
         metadata,
         AUTHORIZATION_METADATA,
         () => new Map<string | symbol, AuthorizationMetadata>(),
         (inherited) => new Map(inherited),
       )
-      authorizationMap.set(ctxOrKey.name, authorization)
+      const name = ctxOrKey.name
+      // Só a entrada própria conta: a herdada da classe pai pode ser sobrescrita.
+      if (ownedBefore && authorizationMap.has(name)) {
+        throw new Error(
+          `[Authorized] @Authorized aplicado mais de uma vez em ${String(name)}; combine as permissões em uma única chamada.`,
+        )
+      }
+      authorizationMap.set(name, authorization)
       return
     }
 
@@ -51,7 +59,13 @@ export function Authorized(
     const authorizationMap =
       legacyAuthorizationMap.get(target) ??
       new Map<string | symbol, AuthorizationMetadata>()
-    authorizationMap.set(ctxOrKey as string | symbol, authorization)
+    const name = ctxOrKey as string | symbol
+    if (authorizationMap.has(name)) {
+      throw new Error(
+        `[Authorized] @Authorized aplicado mais de uma vez em ${String(name)}; combine as permissões em uma única chamada.`,
+      )
+    }
+    authorizationMap.set(name, authorization)
     legacyAuthorizationMap.set(target, authorizationMap)
   }
 }

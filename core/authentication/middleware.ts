@@ -16,7 +16,8 @@ export type AuthenticationMiddlewareOptions = {
   authentication: AuthenticationConfig
   requiredPermissions: string[]
   allowedKinds: PrincipalKind[] | undefined
-  hasAuthorizedDecorator: boolean
+  /** Rota exige um principal: sem ele, responde 401 (fail-closed). */
+  requirePrincipal: boolean
 }
 
 export function createAuthenticationMiddleware(
@@ -26,7 +27,7 @@ export function createAuthenticationMiddleware(
     authentication,
     requiredPermissions,
     allowedKinds,
-    hasAuthorizedDecorator,
+    requirePrincipal,
   } = options
 
   return async function authenticationMiddleware(
@@ -44,8 +45,9 @@ export function createAuthenticationMiddleware(
       return next(new UnauthorizedError('Unauthorized', { cause: err }))
     }
 
-    if (resolved == null) {
-      if (hasAuthorizedDecorator) {
+    // `{ principal: null }` equivale a não autenticado.
+    if (resolved == null || resolved.principal == null) {
+      if (requirePrincipal) {
         return next(new UnauthorizedError())
       }
       return next()

@@ -23,7 +23,7 @@ describe('createAuthenticationMiddleware — happy path', () => {
       authentication: config,
       requiredPermissions: ['posts:read'],
       allowedKinds: undefined,
-      hasAuthorizedDecorator: true,
+      requirePrincipal: true,
     })
 
     const { request, response, next } = mockReqRes()
@@ -49,7 +49,7 @@ describe('createAuthenticationMiddleware — no principal resolved', () => {
       authentication: config,
       requiredPermissions: [],
       allowedKinds: undefined,
-      hasAuthorizedDecorator: true,
+      requirePrincipal: true,
     })
     const { request, response, next } = mockReqRes()
 
@@ -70,7 +70,7 @@ describe('createAuthenticationMiddleware — no principal resolved', () => {
       authentication: config,
       requiredPermissions: [],
       allowedKinds: undefined,
-      hasAuthorizedDecorator: false,
+      requirePrincipal: false,
     })
     const { request, response, next } = mockReqRes()
 
@@ -90,7 +90,7 @@ describe('createAuthenticationMiddleware — no principal resolved', () => {
       authentication: config,
       requiredPermissions: [],
       allowedKinds: undefined,
-      hasAuthorizedDecorator: true,
+      requirePrincipal: true,
     })
     const { request, response, next } = mockReqRes()
     await middleware(request, response, next)
@@ -112,7 +112,7 @@ describe('createAuthenticationMiddleware — kind restriction', () => {
       authentication: config,
       requiredPermissions: [],
       allowedKinds: ['user'],
-      hasAuthorizedDecorator: true,
+      requirePrincipal: true,
     })
     const { request, response, next } = mockReqRes()
 
@@ -133,7 +133,7 @@ describe('createAuthenticationMiddleware — kind restriction', () => {
       authentication: config,
       requiredPermissions: [],
       allowedKinds: ['user', 'api-key'],
-      hasAuthorizedDecorator: true,
+      requirePrincipal: true,
     })
     const { request, response, next } = mockReqRes()
 
@@ -158,7 +158,7 @@ describe('createAuthenticationMiddleware — authorization denied', () => {
       authentication: config,
       requiredPermissions: ['posts:write'],
       allowedKinds: undefined,
-      hasAuthorizedDecorator: true,
+      requirePrincipal: true,
     })
     const { request, response, next } = mockReqRes()
 
@@ -179,7 +179,7 @@ describe('createAuthenticationMiddleware — authorization denied', () => {
       authentication: config,
       requiredPermissions: ['a', 'b'],
       allowedKinds: undefined,
-      hasAuthorizedDecorator: true,
+      requirePrincipal: true,
     })
     const { request, response, next } = mockReqRes()
 
@@ -203,7 +203,7 @@ describe('createAuthenticationMiddleware — checker throws', () => {
       authentication: config,
       requiredPermissions: [],
       allowedKinds: undefined,
-      hasAuthorizedDecorator: true,
+      requirePrincipal: true,
     })
     const { request, response, next } = mockReqRes()
 
@@ -214,5 +214,40 @@ describe('createAuthenticationMiddleware — checker throws', () => {
     expect(passedErr.message).toBe('Unauthorized')
     expect((passedErr as any).cause).toBe(cause)
     expect(config.authorizationChecker).not.toHaveBeenCalled()
+  })
+})
+
+describe('createAuthenticationMiddleware — principal nulo', () => {
+  const build = (requirePrincipal: boolean) => {
+    const config: AuthenticationConfig = {
+      currentUserChecker: vi.fn().mockResolvedValue({ principal: null, kind: 'user' }),
+      authorizationChecker: vi.fn().mockResolvedValue(true),
+      openApiSecuritySchemes: {},
+    }
+    const middleware = createAuthenticationMiddleware({
+      authentication: config,
+      requiredPermissions: [],
+      allowedKinds: undefined,
+      requirePrincipal,
+    })
+    return { config, middleware }
+  }
+
+  it('trata { principal: null } como não autenticado: 401 com requirePrincipal', async () => {
+    const { config, middleware } = build(true)
+    const { request, response, next } = mockReqRes()
+    await middleware(request, response, next)
+    expect(next).toHaveBeenCalledTimes(1)
+    expect(next.mock.calls[0][0]).toBeInstanceOf(UnauthorizedError)
+    expect(config.authorizationChecker).not.toHaveBeenCalled()
+  })
+
+  it('trata { principal: null } como não autenticado: next() sem erro e sem anexar nada caso contrário', async () => {
+    const { config, middleware } = build(false)
+    const { request, response, next } = mockReqRes()
+    await middleware(request, response, next)
+    expect(next).toHaveBeenCalledWith()
+    expect(config.authorizationChecker).not.toHaveBeenCalled()
+    expect(request.__resolvedPrincipal).toBeUndefined()
   })
 })

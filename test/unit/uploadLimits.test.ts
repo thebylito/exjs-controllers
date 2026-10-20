@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { configureApplication } from '#exjs-controllers/config/configureApplication'
 import { _resetRoutesForTests } from '#exjs-controllers/core/Router'
@@ -8,6 +8,7 @@ import {
 } from '#exjs-controllers/core/uploadLimits'
 import { Controller } from '#exjs-controllers/decorators/Controller'
 import { Post } from '#exjs-controllers/decorators/HttpMethod'
+import { CurrentUser } from '#exjs-controllers/decorators/CurrentUser'
 import { UploadedFile, UploadedFiles } from '#exjs-controllers/decorators/Params'
 import { createApplication, type Application } from '#exjs-controllers/http/application'
 
@@ -184,6 +185,62 @@ describe('upload limits — logger ativo (uploads-2)', () => {
     } finally {
       process.removeAllListeners('uncaughtException')
       for (const listener of previousListeners) process.on('uncaughtException', listener)
+    }
+  })
+})
+
+describe('upload — autenticação antes do multer', () => {
+  it('rota com @CurrentUser() obrigatório e sem @Authorized responde 401 antes do multer parsear o multipart', async () => {
+    _resetRoutesForTests()
+    const fileFilter = vi.fn((_req: unknown, _file: unknown, cb: (e: null, ok: boolean) => void) =>
+      cb(null, true),
+    )
+    const handler = vi.fn()
+
+    @Controller('/secure')
+    class SecureUploadController {
+      @Post('/upload')
+      upload(
+        @CurrentUser() user: unknown,
+        @UploadedFile('file', { options: { fileFilter } }) file: unknown,
+      ) {
+        handler(user, file)
+        return { ok: true }
+      }
+    }
+
+    const secureApp = createApplication()
+    await configureApplication(secureApp, {
+      controllers: [SecureUploadController],
+      logger: false,
+      authentication: {
+        currentUserChecker: async () => null,
+        authorizationChecker: () => true,
+        openApiSecuritySchemes: {},
+      },
+      errorHandler: (error: any, _request, response, _next) => {
+        response.status(error.statusCode ?? error.status ?? 500).json({ code: error.name })
+      },
+    })
+    await new Promise<void>((resolve) => secureApp.listen(0, resolve))
+    try {
+      const address = secureApp.address()
+      if (!address || typeof address === 'string') throw new Error('Servidor de teste sem porta TCP')
+      const body = Buffer.concat([
+        filePart('file', Buffer.from('conteudo')),
+        Buffer.from(`--${BOUNDARY}--\r\n`),
+      ])
+      const res = await fetch(`http://127.0.0.1:${address.port}/secure/upload`, {
+        method: 'POST',
+        headers: { 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
+        body,
+      })
+      await res.text()
+      expect(res.status).toBe(401)
+      expect(fileFilter).not.toHaveBeenCalled()
+      expect(handler).not.toHaveBeenCalled()
+    } finally {
+      await new Promise<void>((resolve) => secureApp.close(() => resolve()))
     }
   })
 })
