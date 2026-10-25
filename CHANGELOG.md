@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.13.1] — 2026-10-25
+
+### Fixed
+
+- **Ingresso de DTO (`BaseSchema.create`/`merge` e `@Body`)**: `create`/`merge` aplicavam os dados com `Object.assign` — semântica `[[Set]]` — então uma chave `__proto__` própria substituía o protótipo da instância e chaves com nome de método sombreavam membros do protótipo; o filtro que bloqueava isso existia só na hidratação do `@Body`. Os três caminhos agora compartilham o mesmo filtro (`FORBIDDEN_INGRESS_KEYS` + `resolvesToFunctionMember`): chaves proibidas ignoradas, métodos preservados, chaves extras e chaves symbol enumeráveis mantidas e getters de destino nunca invocados (só o setter, como o `Object.assign` sempre fez).
+- **Cookie parser** gravava num objeto comum: um cookie chamado `__proto__` era descartado silenciosamente pelo acessor de `Object.prototype`. O container agora tem protótipo nulo e todo nome de cookie vira chave própria; quem usava métodos herdados (ex.: `cookies.hasOwnProperty`) deve usar `Object.hasOwn`.
+
+### Changed
+
+- **CI**: as 14 referências a GitHub Actions nos três workflows passam a fixar o SHA de commit do action (antes, tags de major mutáveis como `@v7`).
+
+### Security
+
+- **multer `^2.5.0`**: a 2.4.0 é afetada por GHSA-q7qp-rjg7-q26m (alta) — DoS via `fileFilter` assíncrono pendente após o teardown do request; corrigido na 2.5.0.
+
 ## [0.13.0] — 2026-10-19
 
 ### Added
@@ -79,6 +94,7 @@ Correções da auditoria de segurança de 2026-10-19. Afetam todas as versões a
 
 - **`exports` `./authentication/*` e `./entities/*` do `package.json`.** Apontavam para diretórios que não existem desde a 0.5.0; qualquer import por esses caminhos já falhava.
 
+[0.13.1]: https://github.com/thebylito/exjs-controllers/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/thebylito/exjs-controllers/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/thebylito/exjs-controllers/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/thebylito/exjs-controllers/compare/v0.11.0...v0.11.1
