@@ -30,19 +30,15 @@ import {
 } from '#exjs-controllers/metadata/legacyStorage'
 import { classToZodOrUndefined } from '#exjs-controllers/core/ClassToZod'
 import { resolveDependency } from '#exjs-controllers/core/DependencyContainer'
+import {
+  FORBIDDEN_INGRESS_KEYS,
+  resolvesToFunctionMember,
+} from '#exjs-controllers/schemas/BaseSchema'
 import { runWithControllerSpan } from '#exjs-controllers/observability/tracing'
 
 export type ControllerClass = new (...args: any[]) => object
 
 const registeredRoutes = new Set<string>()
-
-// Chaves que nunca podem ser copiadas do body para o DTO (prototype pollution
-// e sombreamento do protótipo da instância).
-const FORBIDDEN_BODY_KEYS: ReadonlySet<string> = new Set([
-  '__proto__',
-  'constructor',
-  'prototype',
-])
 
 // Chaves declaradas via @Field (inclui herdadas). `null` quando a classe não
 // declara nenhum campo — nesse caso só as chaves proibidas são filtradas.
@@ -404,13 +400,14 @@ function hydrateBodyArg(
 
   // Copia só chaves próprias e declaradas, por atribuição simples: nunca
   // Object.assign com o body cru (mass assignment / troca de protótipo).
-  // Chaves que já são métodos na instância (`validate`, `merge`, `toString`,
-  // `hasOwnProperty`...) também ficam de fora, para não sombrear o método.
+  // Chaves que resolvem para métodos na instância (`validate`, `merge`,
+  // `toString`, `hasOwnProperty`...) também ficam de fora, para não sombrear
+  // o método — inspecionando descriptors, sem invocar getters de acessores.
   const instance = new SchemaClass() as Record<string, unknown>
   const source = body as Record<string, unknown>
   for (const key of Object.keys(source)) {
-    if (FORBIDDEN_BODY_KEYS.has(key)) continue
-    if (typeof instance[key] === 'function') continue
+    if (FORBIDDEN_INGRESS_KEYS.has(key)) continue
+    if (resolvesToFunctionMember(instance, key)) continue
     if (declaredKeys !== null && !declaredKeys.has(key)) continue
     instance[key] = source[key]
   }
