@@ -19,10 +19,30 @@ export const FORBIDDEN_INGRESS_KEYS: ReadonlySet<string> = new Set([
   'prototype',
 ])
 
+// True quando `key` resolve para um método (propriedade de dados cujo valor é
+// função) na cadeia de protótipos — inspecionando descriptors, sem invocar
+// getters de acessores (que podem exigir estado ainda não inicializado).
+// Acessores (get/set) não são métodos: a atribuição via [[Set]] chama o setter,
+// como o Object.assign sempre fez.
+export function resolvesToFunctionMember(instance: object, key: PropertyKey): boolean {
+  for (
+    let current: object | null = instance;
+    current;
+    current = Object.getPrototypeOf(current)
+  ) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, key)
+    if (descriptor) {
+      return typeof descriptor.value === 'function'
+    }
+  }
+
+  return false
+}
+
 // Copia só chaves próprias enumeráveis (string e symbol, como o Object.assign),
 // por atribuição simples: nunca Object.assign com dados crus (Object.assign usa
 // [[Set]] e um `__proto__` próprio substitui o protótipo da instância). Chaves
-// que já são métodos na instância (`validate`, `merge`, `toString`,
+// que resolvem para métodos na instância (`validate`, `merge`, `toString`,
 // `hasOwnProperty`...) também ficam de fora.
 function applyIngressData(
   instance: Record<PropertyKey, unknown>,
@@ -31,7 +51,7 @@ function applyIngressData(
   for (const key of Reflect.ownKeys(data)) {
     if (!Object.prototype.propertyIsEnumerable.call(data, key)) continue
     if (typeof key === 'string' && FORBIDDEN_INGRESS_KEYS.has(key)) continue
-    if (typeof instance[key] === 'function') continue
+    if (resolvesToFunctionMember(instance, key)) continue
     instance[key] = data[key]
   }
 }

@@ -83,4 +83,27 @@ describe('BaseSchema.validate()', () => {
 
     expect((input as unknown as Record<symbol, unknown>)[ownerSymbol]).toBe('u1')
   })
+
+  it('create() and merge() invoke only the destination setter, never the getter', () => {
+    class AccessorInput extends BaseSchema {
+      private _name?: string
+
+      get name(): string {
+        return this._name!.trim()
+      }
+
+      set name(value: string) {
+        this._name = value
+      }
+    }
+
+    const created = AccessorInput.create({ name: 'Alice' })
+
+    expect(created.name).toBe('Alice')
+
+    const input = new AccessorInput()
+    input.merge({ name: 'Bob' })
+
+    expect(input.name).toBe('Bob')
+  })
 })

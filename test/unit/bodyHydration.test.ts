@@ -38,6 +38,18 @@ class ChildInput extends ParentInput {
 
 class UndeclaredInput extends BaseSchema {}
 
+class AccessorInput extends BaseSchema {
+  private _name?: string
+
+  get name(): string {
+    return this._name!.trim()
+  }
+
+  set name(value: string) {
+    this._name = value
+  }
+}
+
 let captured: unknown
 
 @Injectable()
@@ -100,6 +112,12 @@ class ItemsController {
   @Post('/raw')
   raw(@Body() body: unknown) {
     return { received: body ?? null }
+  }
+
+  @Post('/accessor')
+  accessor(@Body(AccessorInput) input: AccessorInput) {
+    captured = input
+    return { name: input.name }
   }
 }
 
@@ -245,5 +263,13 @@ describe('@Body(Dto) hydration', () => {
     expect(Object.hasOwn(dto, 'validate')).toBe(false)
     expect(Object.hasOwn(dto, 'toString')).toBe(false)
     expect(dto.name).toBe('x')
+  })
+
+  it('does not invoke DTO getters while hydrating the body', async () => {
+    const res = await post('/items/accessor', { name: 'Alice' })
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ name: 'Alice' })
+    expect((captured as unknown as AccessorInput).name).toBe('Alice')
   })
 })
