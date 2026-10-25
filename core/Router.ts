@@ -30,19 +30,12 @@ import {
 } from '#exjs-controllers/metadata/legacyStorage'
 import { classToZodOrUndefined } from '#exjs-controllers/core/ClassToZod'
 import { resolveDependency } from '#exjs-controllers/core/DependencyContainer'
+import { FORBIDDEN_INGRESS_KEYS } from '#exjs-controllers/schemas/BaseSchema'
 import { runWithControllerSpan } from '#exjs-controllers/observability/tracing'
 
 export type ControllerClass = new (...args: any[]) => object
 
 const registeredRoutes = new Set<string>()
-
-// Chaves que nunca podem ser copiadas do body para o DTO (prototype pollution
-// e sombreamento do protótipo da instância).
-const FORBIDDEN_BODY_KEYS: ReadonlySet<string> = new Set([
-  '__proto__',
-  'constructor',
-  'prototype',
-])
 
 // Chaves declaradas via @Field (inclui herdadas). `null` quando a classe não
 // declara nenhum campo — nesse caso só as chaves proibidas são filtradas.
@@ -409,7 +402,7 @@ function hydrateBodyArg(
   const instance = new SchemaClass() as Record<string, unknown>
   const source = body as Record<string, unknown>
   for (const key of Object.keys(source)) {
-    if (FORBIDDEN_BODY_KEYS.has(key)) continue
+    if (FORBIDDEN_INGRESS_KEYS.has(key)) continue
     if (typeof instance[key] === 'function') continue
     if (declaredKeys !== null && !declaredKeys.has(key)) continue
     instance[key] = source[key]

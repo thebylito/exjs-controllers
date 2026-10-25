@@ -9,6 +9,31 @@ type NonFunctionPropertyNames<T> = {
 type BaseSchemaData<T> = Pick<T, NonFunctionPropertyNames<T>>
 type BaseSchemaMergeData<T> = Partial<BaseSchemaData<T>>
 
+// Chaves que nunca podem ser copiadas de dados externos para o DTO: prototype
+// pollution e sombreamento do protótipo da instância. Compartilhada com o
+// filtro de @Body em core/Router.ts para que todo ingresso de DTO aplique o
+// mesmo invariante.
+export const FORBIDDEN_INGRESS_KEYS: ReadonlySet<string> = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+])
+
+// Copia só chaves próprias, por atribuição simples: nunca Object.assign com
+// dados crus (Object.assign usa [[Set]] e um `__proto__` próprio substitui o
+// protótipo da instância). Chaves que já são métodos na instância (`validate`,
+// `merge`, `toString`, `hasOwnProperty`...) também ficam de fora.
+function applyIngressData(
+  instance: Record<string, unknown>,
+  data: Record<string, unknown>,
+): void {
+  for (const key of Object.keys(data)) {
+    if (FORBIDDEN_INGRESS_KEYS.has(key)) continue
+    if (typeof instance[key] === 'function') continue
+    instance[key] = data[key]
+  }
+}
+
 export abstract class BaseSchema {
   static toZod<T extends typeof BaseSchema>(this: T): z.ZodObject<ZodRawShape> {
     return classToZod(this as unknown as new (...args: unknown[]) => object)
@@ -19,15 +44,18 @@ export abstract class BaseSchema {
     data?: BaseSchemaData<InstanceType<T>> | undefined,
   ): InstanceType<T> {
     const SchemaClass = this as unknown as new () => InstanceType<T>
+    const instance = new SchemaClass() as unknown as Record<string, unknown>
 
-    return Object.assign(new SchemaClass(), data ?? {}) as InstanceType<T>
+    applyIngressData(instance, (data ?? {}) as Record<string, unknown>)
+
+    return instance as InstanceType<T>
   }
 
   merge<T extends BaseSchema, TData extends object>(
     this: T,
     data: TData & BaseSchemaMergeData<T>,
   ): T & TData {
-    Object.assign(this, data)
+    applyIngressData(this as unknown as Record<string, unknown>, data as Record<string, unknown>)
 
     return this as T & TData
   }
