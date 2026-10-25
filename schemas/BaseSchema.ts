@@ -19,16 +19,18 @@ export const FORBIDDEN_INGRESS_KEYS: ReadonlySet<string> = new Set([
   'prototype',
 ])
 
-// Copia só chaves próprias, por atribuição simples: nunca Object.assign com
-// dados crus (Object.assign usa [[Set]] e um `__proto__` próprio substitui o
-// protótipo da instância). Chaves que já são métodos na instância (`validate`,
-// `merge`, `toString`, `hasOwnProperty`...) também ficam de fora.
+// Copia só chaves próprias enumeráveis (string e symbol, como o Object.assign),
+// por atribuição simples: nunca Object.assign com dados crus (Object.assign usa
+// [[Set]] e um `__proto__` próprio substitui o protótipo da instância). Chaves
+// que já são métodos na instância (`validate`, `merge`, `toString`,
+// `hasOwnProperty`...) também ficam de fora.
 function applyIngressData(
-  instance: Record<string, unknown>,
-  data: Record<string, unknown>,
+  instance: Record<PropertyKey, unknown>,
+  data: Record<PropertyKey, unknown>,
 ): void {
-  for (const key of Object.keys(data)) {
-    if (FORBIDDEN_INGRESS_KEYS.has(key)) continue
+  for (const key of Reflect.ownKeys(data)) {
+    if (!Object.prototype.propertyIsEnumerable.call(data, key)) continue
+    if (typeof key === 'string' && FORBIDDEN_INGRESS_KEYS.has(key)) continue
     if (typeof instance[key] === 'function') continue
     instance[key] = data[key]
   }
@@ -44,9 +46,9 @@ export abstract class BaseSchema {
     data?: BaseSchemaData<InstanceType<T>> | undefined,
   ): InstanceType<T> {
     const SchemaClass = this as unknown as new () => InstanceType<T>
-    const instance = new SchemaClass() as unknown as Record<string, unknown>
+    const instance = new SchemaClass() as unknown as Record<PropertyKey, unknown>
 
-    applyIngressData(instance, (data ?? {}) as Record<string, unknown>)
+    applyIngressData(instance, (data ?? {}) as Record<PropertyKey, unknown>)
 
     return instance as InstanceType<T>
   }
@@ -55,7 +57,7 @@ export abstract class BaseSchema {
     this: T,
     data: TData & BaseSchemaMergeData<T>,
   ): T & TData {
-    applyIngressData(this as unknown as Record<string, unknown>, data as Record<string, unknown>)
+    applyIngressData(this as unknown as Record<PropertyKey, unknown>, data as Record<PropertyKey, unknown>)
 
     return this as T & TData
   }

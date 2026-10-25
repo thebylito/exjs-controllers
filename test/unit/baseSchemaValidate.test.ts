@@ -70,4 +70,17 @@ describe('BaseSchema.validate()', () => {
 
     expect((input as any).extraKey).toBe('v')
   })
+
+  it('create() and merge() preserve enumerable symbol-keyed data properties', () => {
+    const ownerSymbol = Symbol('owner')
+
+    const created = SignupInput.create({ email: 'a@b.com', [ownerSymbol]: 'u1' } as never)
+
+    expect((created as unknown as Record<symbol, unknown>)[ownerSymbol]).toBe('u1')
+
+    const input = Object.assign(new SignupInput(), { email: 'a@b.com', qty: 1 })
+    input.merge({ [ownerSymbol]: 'u1' })
+
+    expect((input as unknown as Record<symbol, unknown>)[ownerSymbol]).toBe('u1')
+  })
 })
