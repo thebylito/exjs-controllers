@@ -17,11 +17,14 @@ function parseCookieHeader(
     ? cookieHeader.join(';')
     : cookieHeader
 
-  if (!source) {
-    return {}
-  }
+  // Container com protótipo nulo: um cookie chamado `__proto__` vira chave
+  // própria em vez de cair no acessor de Object.prototype, e nomes como
+  // `hasOwnProperty`/`constructor` nunca colidem com membros herdados.
+  const cookies: Record<string, string> = Object.create(null)
 
-  const cookies: Record<string, string> = {}
+  if (!source) {
+    return cookies
+  }
 
   for (const chunk of source.split(';')) {
     const separatorIndex = chunk.indexOf('=')
