@@ -39,9 +39,9 @@ __metadata:
   linkType: hard
 
 "@opentelemetry/api@npm:^1.9.1":
-  version: 1.9.1
-  resolution: "@opentelemetry/api@npm:1.9.1"
-  checksum: 10c0/c608485fc8b5a91e1f7e05e843b45b509307456b31cd2ad365933d90813e40ebfedf179f1451c762037e82d7c76aa8500e95d2da3609f640a1206cde5322cd14
+  version: 1.10.0
+  resolution: "@opentelemetry/api@npm:1.10.0"
+  checksum: 10c0/c666f89d882e2e3ea3780b4e419de3ba7e00a80bf334269c3c8507a5e2b4e453e2bc8368f6230f894d789b206c14dde313ea6f51fa7bc629f0eff8480b5d356b
   languageName: node
   linkType: hard
 
@@ -171,24 +171,24 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@scalar/client-side-rendering@npm:0.4.12":
-  version: 0.4.12
-  resolution: "@scalar/client-side-rendering@npm:0.4.12"
+"@scalar/client-side-rendering@npm:0.4.13":
+  version: 0.4.13
+  resolution: "@scalar/client-side-rendering@npm:0.4.13"
   dependencies:
     "@scalar/helpers": "npm:0.16.4"
-    "@scalar/schemas": "npm:0.14.0"
-    "@scalar/types": "npm:0.24.0"
+    "@scalar/schemas": "npm:0.15.0"
+    "@scalar/types": "npm:0.25.0"
     "@scalar/validation": "npm:0.6.7"
-  checksum: 10c0/8f00854b28b9d92aefd63ff341247ac8a8c97c73d683c31f928baf7b44ee6adba18bfd92176167dd66edde93b077fe87edd2f0a16e3f5e6051d11496a70a8708
+  checksum: 10c0/cc44050d181d6d3e09bced52fc3cffdc8c8110da75dcc56064b3c3408d9b9777060dd07bce699c05a221067f7bf03968f447ebcf187123b2e7f1215941de9353
   languageName: node
   linkType: hard
 
 "@scalar/express-api-reference@npm:^0.10.17":
-  version: 0.10.30
-  resolution: "@scalar/express-api-reference@npm:0.10.30"
+  version: 0.10.31
+  resolution: "@scalar/express-api-reference@npm:0.10.31"
   dependencies:
-    "@scalar/client-side-rendering": "npm:0.4.12"
-  checksum: 10c0/1ca0f754313fffafd4a79289b1e5229af100ac687d362415d112d9581e82554bf3fbf96acb5b99f3441970bd2224edc3319fe9122bb2e07d8be0539cfba14b58
+    "@scalar/client-side-rendering": "npm:0.4.13"
+  checksum: 10c0/f389637ff82595e3566ddb6f73be068fc215f3df7c4b69fd1e1b3b0c8e42f0b1baa141177e9282eee1d6208f1c19664d5c1299979bc5a5aac80a7bf4aa41ed62
   languageName: node
   linkType: hard
 
@@ -199,25 +199,25 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@scalar/schemas@npm:0.14.0":
-  version: 0.14.0
-  resolution: "@scalar/schemas@npm:0.14.0"
+"@scalar/schemas@npm:0.15.0":
+  version: 0.15.0
+  resolution: "@scalar/schemas@npm:0.15.0"
   dependencies:
     "@scalar/helpers": "npm:0.16.4"
     "@scalar/validation": "npm:0.6.7"
-  checksum: 10c0/9ecd9a6eb1aae9d49c4df60da98fa2d285abfbb23809c0925976f5e376b713909c96486e8e7ae123e292e094c113f40136b77cf27823483b03fdbda720101849
+  checksum: 10c0/9e673cb15ae3fd3e8ed572d7c3340ff45016c704c5d1a935373a6a0c62626e6676e4d79eb5993e9b910af4567d10996fe97199b103bad74bbb6ebef0da943fa2
   languageName: node
   linkType: hard
 
-"@scalar/types@npm:0.24.0":
-  version: 0.24.0
-  resolution: "@scalar/types@npm:0.24.0"
+"@scalar/types@npm:0.25.0":
+  version: 0.25.0
+  resolution: "@scalar/types@npm:0.25.0"
   dependencies:
     "@scalar/helpers": "npm:0.16.4"
-    nanoid: "npm:^5.1.6"
-    type-fest: "npm:^5.8.0"
-    zod: "npm:^4.4.3"
-  checksum: 10c0/1d2f68137b840d1613cb2574e021af0acb3c41dfa42e8c6b827b4489eee88945b6f098b18bfcef8e2f1a42d2bf939fc818d15e787dcecd6d6e5382dff8443116
+    nanoid: "npm:^5.1.16"
+    type-fest: "npm:^5.10.0"
+    zod: "npm:^4.6.7"
+  checksum: 10c0/1fd0fee2315fb54b827f8e4ebbbf59a193cb4c4e340ab9a3fa604e0f5cae0066654fc3f4b0d77edbab7f17c27ab56f05e19d1d513051d066517994ff9d79ae3c
   languageName: node
   linkType: hard
 
@@ -1278,12 +1278,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nanoid@npm:^5.1.6":
-  version: 5.1.11
-  resolution: "nanoid@npm:5.1.11"
+"nanoid@npm:^5.1.16":
+  version: 5.1.16
+  resolution: "nanoid@npm:5.1.16"
   bin:
     nanoid: bin/nanoid.js
-  checksum: 10c0/91580d18c29263ac0e871734f0d86e7f906f523f974d3c30fc65354ccf387ccffd606c2a6c28acc2977a3950146347e790ce9e3f514133a48995af5ccdb308ce
+  checksum: 10c0/04b4f96237f5639716da0e98f453361b313bebaf458bb67dea2d384724fc8b3340a28f032a4373052150bcf3b801d122e291d81ae4fc522969f55c134f4401a3
   languageName: node
   linkType: hard
 
@@ -1815,12 +1815,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"type-fest@npm:^5.8.0":
-  version: 5.9.0
-  resolution: "type-fest@npm:5.9.0"
+"type-fest@npm:^5.10.0":
+  version: 5.10.0
+  resolution: "type-fest@npm:5.10.0"
   dependencies:
     tagged-tag: "npm:^1.0.0"
-  checksum: 10c0/9bf14a49454b9b40d9fe85e563a4cf90990bbe7c75958665b72660b4197a905f247be682a7757cac7c8fa60fc0eae32cc8cf51f80a88e15f0a3d4a8ec07eb5b6
+  checksum: 10c0/313c5d0e37a3f1cc82e942f3228f897623c8b54a63a8a95532d0c2c21ab200793caa70bd8904a83fd713eb28d87ba32468b09b345ef6efa25cecb345b467226f
   languageName: node
   linkType: hard
 
@@ -2167,7 +2167,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"zod@npm:^4.4.3, zod@npm:^4.5.4":
+"zod@npm:^4.5.4, zod@npm:^4.6.7":
   version: 4.6.7
   resolution: "zod@npm:4.6.7"
   checksum: 10c0/4ce2eb14034317b7254e347ca37b5ad591cf8333147030cf05b9b5d31692d45073f7f2747aa50cf8c6b29012194d2b22978cecc89969cf34a0d18e89d0ee7d7b
