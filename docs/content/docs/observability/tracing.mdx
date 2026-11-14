@@ -65,13 +65,13 @@ import { NodeSDK } from '@opentelemetry/sdk-node'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
 
 const sdk = new NodeSDK({
-  traceExporter: new OTLPTraceExporter({
-    url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT
-  })
+  traceExporter: new OTLPTraceExporter()
 })
 
 await sdk.start()
 ```
+
+Without a `url`, the exporter reads `OTEL_EXPORTER_OTLP_ENDPOINT` (for example `http://collector:4318`) and posts to `<endpoint>/v1/traces`. A `url` passed explicitly is used as-is, so it must be the full traces URL; passing the bare endpoint makes every export fail with `404`.
 
 ```ts title="src/server.ts"
 import './telemetry' // must come first
