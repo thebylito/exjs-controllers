@@ -1,0 +1,363 @@
+---
+title: Grafana, Loki and Tempo
+description: Run your app in Docker next to Grafana, Loki and Tempo, and jump from a log line to its trace.
+icon: Stack
+---
+
+This page builds a local observability stack with Docker Compose. Your `exjs-controllers` app runs in a container, its logs land in **Loki**, its traces land in **Tempo**, and **Grafana** shows both, with links from a log line to its trace and back.
+
+The app needs no logging code for this. The [HTTP logger](/docs/observability/logger) already writes JSON to stdout and stamps `traceId` / `spanId` on every line while a span is active (see [Tying logs and traces together](/docs/observability/tracing#tying-logs-and-traces-together)). The stack only has to collect those lines and the spans.
+
+```txt
+api ── JSON on stdout ──> Docker ──> Alloy ──> Loki  ──┐
+api ── OTLP :4318 ─────────────────> Alloy ──> Tempo ──┴──> Grafana
+```
+
+[Grafana Alloy](https://grafana.com/docs/alloy/latest/) is the single collector: it tails the app container's logs through the Docker socket and receives the app's spans over OTLP.
+
+## Files
+
+```txt
+.
+├── src/
+│   ├── telemetry.ts
+│   ├── server.ts
+│   └── users.controller.ts   # your controllers, unchanged
+├── Dockerfile
+├── .dockerignore
+├── compose.yaml
+├── alloy/
+│   └── config.alloy
+├── tempo/
+│   └── tempo.yaml
+└── grafana/
+    └── datasources.yaml
+```
+
+The examples assume an ESM project (`"type": "module"`) whose `npm run build` compiles `src/` to `dist/` with `tsc`, as in [Getting Started](/docs/core/getting-started). Image versions are pinned to the ones this page was tested with; bump them as new releases come out.
+
+## App side
+
+Install the OpenTelemetry SDK and the OTLP exporter:
+
+```bash
+npm install @opentelemetry/sdk-node @opentelemetry/exporter-trace-otlp-http
+```
+
+Start the SDK in its own module. Without a `url`, the exporter reads `OTEL_EXPORTER_OTLP_ENDPOINT` and posts to `<endpoint>/v1/traces`; the service name comes from `OTEL_SERVICE_NAME`. Both are set in `compose.yaml`.
+
+```ts title="src/telemetry.ts"
+import { NodeSDK } from '@opentelemetry/sdk-node'
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
+
+const sdk = new NodeSDK({
+  traceExporter: new OTLPTraceExporter()
+})
+
+sdk.start()
+
+// Flush pending spans when `docker compose stop` sends SIGTERM.
+process.on('SIGTERM', () => {
+  sdk.shutdown().finally(() => process.exit(0))
+})
+```
+
+Keep the logger on JSON output and emit the level as a label:
+
+```ts title="src/server.ts"
+import { createApplication } from 'exjs-controllers/http/application'
+import { configureApplication } from 'exjs-controllers/config/configureApplication'
+import { UsersController } from './users.controller.js'
+
+const app = createApplication()
+
+await configureApplication(app, {
+  controllers: [UsersController],
+  logger: { levelFormat: 'label' }
+})
+
+app.listen(3000)
+```
+
+With the default `levelFormat: 'number'`, Loki cannot map `"level":30` to a severity and Grafana shows every line as `unknown`. With `'label'` it detects `info`, `warn`, `error` and so on. See [Level format](/docs/observability/logger#level-format).
+
+`server.ts` does not import `telemetry.ts`. The Dockerfile loads it with `node --import`, so the SDK is registered before any application module runs.
+
+## Dockerfile
+
+```dockerfile title="Dockerfile"
+# syntax=docker/dockerfile:1
+
+FROM node:24-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build
+
+FROM node:24-alpine
+ENV NODE_ENV=production
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY --from=build /app/dist ./dist
+USER node
+EXPOSE 3000
+# --import loads the OpenTelemetry SDK before any application module.
+CMD ["node", "--import", "./dist/telemetry.js", "dist/server.js"]
+```
+
+```txt title=".dockerignore"
+node_modules
+dist
+```
+
+## compose.yaml
+
+```yaml title="compose.yaml"
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      OTEL_SERVICE_NAME: api
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+    labels:
+      logging: alloy # opt-in: Alloy only collects containers with this label
+    depends_on:
+      - alloy
+
+  alloy:
+    image: grafana/alloy:v1.21.3
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "12345:12345" # Alloy UI
+    depends_on:
+      - loki
+      - tempo
+
+  loki:
+    image: grafana/loki:3.7.9
+    ports:
+      - "3100:3100"
+
+  tempo:
+    image: grafana/tempo:3.1.1
+    command: ["-target=all", "-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      - loki
+      - tempo
+
+volumes:
+  tempo-data:
+```
+
+Grafana is published on port `3001` so it does not clash with the app on `3000`. Loki runs with the default configuration shipped in its image.
+
+`OTEL_SERVICE_NAME` must match the Compose service name (`api`). Alloy labels each log stream with the Compose service name as `service_name`, and Grafana uses that label to find the logs of a trace.
+
+## Configuration files
+
+### Alloy
+
+```hcl title="alloy/config.alloy"
+// ---------- Logs: container stdout -> Loki ----------
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+
+  filter {
+    name   = "label"
+    values = ["logging=alloy"]
+  }
+}
+
+discovery.relabel "containers" {
+  targets = []
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service_name"
+  }
+}
+
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.containers.targets
+  relabel_rules = discovery.relabel.containers.rules
+  forward_to    = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// ---------- Traces: OTLP -> Tempo ----------
+
+otelcol.receiver.otlp "default" {
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo:4317"
+
+    tls {
+      insecure = true
+    }
+  }
+}
+```
+
+Only containers labelled `logging=alloy` are collected, so the stack's own containers stay out of Loki. Add the label to any other service you want to collect.
+
+### Tempo
+
+```yaml title="tempo/tempo.yaml"
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+usage_report:
+  reporting_enabled: false
+```
+
+### Grafana data sources
+
+```yaml title="grafana/datasources.yaml"
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    uid: loki
+    url: http://loki:3100
+    isDefault: true
+    jsonData:
+      derivedFields:
+        # Turns the traceId field of each log line into a link to Tempo.
+        - name: traceId
+          matcherRegex: '"traceId":"(\w+)"'
+          datasourceUid: tempo
+          url: "$${__value.raw}" # $$ escapes Grafana's env-var interpolation
+          urlDisplayLabel: View trace
+
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    url: http://tempo:3200
+    jsonData:
+      tracesToLogsV2:
+        # "Logs for this trace" opens Loki filtered by service and trace id.
+        datasourceUid: loki
+        filterByTraceID: true
+        spanStartTimeShift: "-5m"
+        spanEndTimeShift: "5m"
+        tags:
+          - key: service.name
+            value: service_name
+```
+
+## Running it
+
+```bash
+docker compose up -d --build
+curl http://localhost:3000/users/1
+```
+
+Each request produces log lines like this one, with the `traceId` / `spanId` of the active span:
+
+```jsonc
+{
+  "level": "info",
+  "time": 1794626175623,
+  "correlationId": "f588cb10-f8a0-4708-9a25-ae1786f3d06b",
+  "traceId": "ec899f83be8fac9f90b5c1857093a6bd",
+  "spanId": "30f320ad1de07c66",
+  "httpRequest": {
+    "requestMethod": "GET",
+    "requestUrl": "/users/1",
+    "requestSize": "-",
+    "status": "200",
+    "userAgent": "curl/8.7.1",
+    "remoteIp": "192.168.65.1",
+    "serverIp": "172.27.0.6",
+    "referrer": "-"
+  }
+}
+```
+
+Open Grafana at [http://localhost:3001](http://localhost:3001), go to **Explore**, pick **Loki** and run:
+
+```txt
+{service_name="api"} | json
+```
+
+Click a log line to open its details. Under **Links**, **View trace** opens the request's trace in Tempo next to the logs, with the controller span and any nested `@DefineUseCase` / `@TraceSpan` spans. In the trace view, **Logs for this trace** goes back to Loki, filtered by the service and that trace id.
+
+If nothing shows up, the Alloy UI at [http://localhost:12345](http://localhost:12345) shows the state of each pipeline component.
+
+## Before production
+
+This stack is meant for local development. Before running anything like it elsewhere:
+
+- **Grafana** runs with anonymous admin access and no login form. Turn both off and configure real authentication.
+- **The Docker socket** gives Alloy full control of the Docker daemon; mounting it `:ro` does not limit the API. On Kubernetes, use Alloy's Kubernetes discovery instead.
+- **Storage** is local to the containers, with no retention policy. Loki and Tempo both support object storage and retention settings.
+
+See the [Alloy](https://grafana.com/docs/alloy/latest/), [Loki](https://grafana.com/docs/loki/latest/) and [Tempo](https://grafana.com/docs/tempo/latest/) documentation for production setups.
