@@ -65,13 +65,13 @@ import { NodeSDK } from '@opentelemetry/sdk-node'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
 
 const sdk = new NodeSDK({
-  traceExporter: new OTLPTraceExporter({
-    url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT
-  })
+  traceExporter: new OTLPTraceExporter()
 })
 
 await sdk.start()
 ```
+
+Without a `url`, the exporter reads `OTEL_EXPORTER_OTLP_ENDPOINT` (for example `http://collector:4318`) and posts to `<endpoint>/v1/traces`. A `url` passed explicitly is used as-is, so it must be the full traces URL; passing the bare endpoint makes every export fail with `404`.
 
 ```ts title="src/server.ts"
 import './telemetry' // must come first
@@ -91,3 +91,5 @@ The HTTP logger emits `correlationId` per request, and the logger automatically 
 - **The HTTP access log** is emitted on the response `close` event — after the span has ended and outside the async context — so the framework captures the request's outermost span context (the controller span) into the request log context and reuses it for that final line.
 
 This requires a registered OpenTelemetry SDK/provider (see above). With only `@opentelemetry/api` and no provider, spans are no-ops with an invalid context, so `traceId` / `spanId` are omitted (they show as `-` in the pretty formatter). The pretty log formatter surfaces both when present, so you can pivot from a log line straight to your tracing UI.
+
+For a complete local setup that links logs and traces in Grafana, see [Grafana, Loki and Tempo](/docs/observability/grafana-stack).

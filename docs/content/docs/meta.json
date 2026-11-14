@@ -21,6 +21,7 @@
     "documentation/scalar",
     "---Observability---",
     "observability/logger",
-    "observability/tracing"
+    "observability/tracing",
+    "observability/grafana-stack"
   ]
 }
